@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64", "setuptools_scm>=8"]
+requires = ["setuptools>=69", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -21,7 +21,7 @@ classifiers = [
 
 [project.optional-dependencies]
 full = [
-    "deltachat-rpc-server>=1.133.2",
+    "deltachat-rpc-server>=1.136.6",
 ]
 dev = [
   "deltachat-rpc-server",

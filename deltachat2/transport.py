@@ -56,7 +56,7 @@ class IOTransport:
         self.id_iterator: Iterator[int]
         # Map from request ID to the result.
         self.pending_results: Dict[int, _Result]
-        self.request_queue: Queue[Any]
+        self.request_queue: Queue
         self.closing: bool
         self.reader_thread: Thread
         self.writer_thread: Thread
