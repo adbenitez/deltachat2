@@ -158,7 +158,7 @@ class NewMsgEvent:
 
 
 @dataclass
-class MsgData:
+class MsgData(AttrDict):
     """Message data provided to Rpc.send_msg()"""
 
     text: Optional[str] = None

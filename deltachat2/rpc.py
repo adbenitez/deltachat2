@@ -15,4 +15,4 @@ class Rpc:
 
     def send_msg(self, accid: int, chatid: int, data: MsgData) -> int:
         """Send a message and return the message ID of the sent message."""
-        return self.transport.call("send_msg", accid, chatid, data)
+        return self.transport.call("send_msg", accid, chatid, data.to_dict())
