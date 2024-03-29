@@ -9,10 +9,7 @@ class AttrDict(dict):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(
-            {
-                _camel_to_snake(key): to_attrdict(value)
-                for key, value in dict(*args, **kwargs).items()
-            }
+            {_camel2snake(key): to_attrdict(value) for key, value in dict(*args, **kwargs).items()}
         )
 
     def __getattr__(self, attr):
@@ -25,18 +22,19 @@ class AttrDict(dict):
             raise AttributeError("Attribute-style access is read only")
         super().__setattr__(attr, val)
 
-    def to_dict(self) -> dict:
-        return dict({_snake_to_camel(key): value for key, value in self.items()})
 
-
-def _camel_to_snake(name: str) -> str:
+def _camel2snake(name: str) -> str:
     name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
     name = re.sub("__([A-Z])", r"_\1", name)
     name = re.sub("([a-z0-9])([A-Z])", r"\1_\2", name)
     return name.lower()
 
 
-def _snake_to_camel(name: str) -> str:
+def _snake2camel(obj: dict) -> dict:
+    return {_snake2camel_str(key): value for key, value in obj.items()}
+
+
+def _snake2camel_str(name: str) -> str:
     parts = name.split("_")
     return parts[0] + "".join(word.capitalize() for word in parts[1:])
 
