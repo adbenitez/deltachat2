@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum
+from typing import Optional, Tuple
 
 from ._utils import AttrDict
 
@@ -97,7 +98,7 @@ class DownloadState(str, Enum):
     IN_PROGRESS = "InProgress"
 
 
-class ViewType(str, Enum):
+class MessageViewtype(str, Enum):
     """Message view type."""
 
     UNKNOWN = "Unknown"
@@ -157,5 +158,17 @@ class NewMsgEvent:
 
 
 @dataclass
-class Message(AttrDict):  # TODO
+class MsgData:
+    """Message data provided to Rpc.send_msg()"""
+
+    text: Optional[str] = None
+    html: Optional[str] = None
+    viewtype: Optional[MessageViewtype] = None
+    file: Optional[str] = None
+    location: Optional[Tuple[float, float]] = None
+    override_sender_name: Optional[str] = None
+    quoted_message_id: Optional[int] = None
+
+
+class Message(AttrDict):
     """Message snapshot"""

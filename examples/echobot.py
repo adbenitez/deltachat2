@@ -2,7 +2,7 @@
 
 import sys
 
-from deltachat2 import Bot, CoreEvent, IOTransport, NewMsgEvent, Rpc, events
+from deltachat2 import Bot, CoreEvent, IOTransport, MsgData, NewMsgEvent, Rpc, events
 
 hooks = events.HookCollection()
 
@@ -17,7 +17,7 @@ def log_event(_bot: Bot, accid: int, event: CoreEvent) -> None:
 def echo(bot: Bot, accid: int, event: NewMsgEvent) -> None:
     """Echo back any text message"""
     msg = event.msg
-    bot.rpc.misc_send_text_message(accid, msg.chat_id, msg.text)
+    bot.rpc.send_msg(accid, msg.chat_id, MsgData(text=msg.text))
 
 
 def main() -> None:
