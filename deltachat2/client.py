@@ -30,12 +30,12 @@ class Client:
     def add_hook(self, hook: HookCallback, event: Union[type, EventFilter] = RawEvent) -> None:
         """Register hook for the given event filter."""
         event2 = event() if isinstance(event, type) else event
-        self._hooks.setdefault(type(event), set()).add((hook, event2))
+        self._hooks.setdefault(type(event2), set()).add((hook, event2))
 
     def remove_hook(self, hook: HookCallback, event: Union[type, EventFilter]) -> None:
         """Unregister hook from the given event filter."""
         event2 = event() if isinstance(event, type) else event
-        self._hooks.get(type(event), set()).remove((hook, event2))
+        self._hooks.get(type(event2), set()).remove((hook, event2))
 
     def configure(self, account_id: int, email: str, password: str, **kwargs) -> None:
         """Configure the account with the given account ID."""
