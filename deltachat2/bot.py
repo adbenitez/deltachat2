@@ -25,6 +25,7 @@ class Bot(Client):
     ) -> None:
         """The keyword arguments will be passed to Client superclass constructor."""
         self.command_prefix = command_prefix
+        logger = logger or logging.getLogger("deltachat2.Bot")
         super().__init__(rpc, hooks, logger)
 
     def configure(self, account_id: int, email: str, password: str, **kwargs) -> None:

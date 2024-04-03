@@ -45,6 +45,7 @@ class IOTransport:
 
     def __init__(self, accounts_dir: Optional[str] = None, **kwargs):
         """The given arguments will be passed to subprocess.Popen()"""
+        self.logger = logging.getLogger("deltachat2.IOTransport")
         if accounts_dir:
             kwargs["env"] = {
                 **kwargs.get("env", os.environ),
@@ -112,10 +113,10 @@ class IOTransport:
                 if "id" in response:
                     self.pending_results.pop(response["id"]).set(response)
                 else:
-                    logging.warning("Got a response without ID: %s", response)
+                    self.logger.warning("Got a response without ID: %s", response)
         except Exception:
             # Log an exception if the reader loop dies.
-            logging.exception("Exception in the reader loop")
+            self.logger.exception("Exception in the reader loop")
 
     def _writer_loop(self) -> None:
         """Writer loop ensuring only a single thread writes requests."""
@@ -130,7 +131,7 @@ class IOTransport:
                 self.process.stdin.flush()
         except Exception:
             # Log an exception if the writer loop dies.
-            logging.exception("Exception in the writer loop")
+            self.logger.exception("Exception in the writer loop")
 
     def call(self, method: str, *args) -> Any:
         """Request the RPC server to call a function and return its return value if any."""

@@ -18,7 +18,7 @@ class Client:
         logger: Optional[logging.Logger] = None,
     ) -> None:
         self.rpc = rpc
-        self.logger = logger or logging
+        self.logger = logger or logging.getLogger("deltachat2.Client")
         self._hooks: Dict[type, Set[Tuple[HookCallback, EventFilter]]] = {}
         self.add_hooks(hooks or [])
 
