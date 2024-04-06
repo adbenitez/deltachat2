@@ -10,10 +10,11 @@ from .types import Event, EventType, Message, NewMsgEvent, SpecialContactId
 
 
 class Bot(Client):
-    """A Delta Chat client with the bot flag set.
+    """A Delta Chat client with the bot setting set to 1.
 
     This bot client triggers "NewMessage" highlevel events
-    in addition to raw core events.
+    in addition to raw core events. The account will have the settings bcc_self set to 0,
+    and delete_server_after set to 1.
     """
 
     def __init__(
@@ -31,6 +32,8 @@ class Bot(Client):
     def configure(self, account_id: int, email: str, password: str, **kwargs) -> None:
         """Configure the account with the given account ID."""
         kwargs.setdefault("bot", "1")
+        kwargs.setdefault("delete_server_after", "1")
+        kwargs.setdefault("bcc_self", "0")
         super().configure(account_id, email, password, **kwargs)
 
     def has_command(self, command: str) -> bool:
