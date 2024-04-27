@@ -7,6 +7,8 @@ from .events import EventFilter, HookCallback, RawEvent
 from .rpc import Rpc
 from .types import CoreEvent, Event
 
+_HookCollection = Dict[type, Set[Tuple[HookCallback, EventFilter]]]
+
 
 class Client:
     """Delta Chat client that listen to raw core events for multiple account."""
@@ -19,7 +21,8 @@ class Client:
     ) -> None:
         self.rpc = rpc
         self.logger = logger or logging.getLogger("deltachat2.Client")
-        self._hooks: Dict[type, Set[Tuple[HookCallback, EventFilter]]] = {}
+        self._hooks: _HookCollection = {}
+        self._post_hooks: _HookCollection = {}
         self.add_hooks(hooks or [])
 
     def add_hooks(self, hooks: Iterable[Tuple[HookCallback, Union[type, EventFilter]]]) -> None:
@@ -27,8 +30,15 @@ class Client:
         for hook, event in hooks:
             self.add_hook(hook, event)
 
+    def add_post_hooks(
+        self, hooks: Iterable[Tuple[HookCallback, Union[type, EventFilter]]]
+    ) -> None:
+        """Register event post-hooks callbacks."""
+        for hook, event in hooks:
+            self.add_post_hook(hook, event)
+
     def add_hook(self, hook: HookCallback, event: Union[type, EventFilter] = RawEvent) -> None:
-        """Register hook for the given event filter."""
+        """Register hook to be called when an event that matches the given filter is received."""
         event2 = event() if isinstance(event, type) else event
         self._hooks.setdefault(type(event2), set()).add((hook, event2))
 
@@ -36,6 +46,16 @@ class Client:
         """Unregister hook from the given event filter."""
         event2 = event() if isinstance(event, type) else event
         self._hooks.get(type(event2), set()).remove((hook, event2))
+
+    def add_post_hook(self, hook: HookCallback, event: Union[type, EventFilter] = RawEvent) -> None:
+        """Register hook to be called after an event that matches the given filter is processed."""
+        event2 = event() if isinstance(event, type) else event
+        self._post_hooks.setdefault(type(event2), set()).add((hook, event2))
+
+    def remove_post_hook(self, hook: HookCallback, event: Union[type, EventFilter]) -> None:
+        """Unregister post-hook from the given event filter."""
+        event2 = event() if isinstance(event, type) else event
+        self._post_hooks.get(type(event2), set()).remove((hook, event2))
 
     def configure(self, account_id: int, email: str, password: str, **kwargs) -> None:
         """Configure the account with the given account ID."""
@@ -73,7 +93,11 @@ class Client:
                 return event
 
     def _on_event(self, event: Event, filter_type: Type[EventFilter]) -> None:
-        for hook, evfilter in self._hooks.get(filter_type, []):
+        self._notify(self._hooks, event, filter_type)
+        self._notify(self._post_hooks, event, filter_type)
+
+    def _notify(self, hooks: _HookCollection, event: Event, filter_type: Type[EventFilter]) -> None:
+        for hook, evfilter in hooks.get(filter_type, []):
             if evfilter.filter(event.event):
                 try:
                     hook(self, event.account_id, event.event)
