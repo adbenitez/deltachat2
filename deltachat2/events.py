@@ -187,7 +187,8 @@ _HookSet = Set[Tuple[HookCallback, Union[type, EventFilter]]]
 
 class HookCollection:
     """
-    Helper class to collect event hooks and post-hooks that can later be added to a Delta Chat client.
+    Helper class to collect event hooks and post-hooks
+    that can be later added to a Delta Chat client.
     """
 
     def __init__(self) -> None:
