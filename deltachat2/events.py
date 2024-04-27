@@ -182,25 +182,42 @@ class NewMessage(EventFilter):
         return super()._call_func(event)
 
 
+_HookSet = Set[Tuple[HookCallback, Union[type, EventFilter]]]
+
+
 class HookCollection:
     """
-    Helper class to collect event hooks that can later be added to a Delta Chat client.
+    Helper class to collect event hooks and post-hooks that can later be added to a Delta Chat client.
     """
 
     def __init__(self) -> None:
-        self._hooks: Set[Tuple[HookCallback, Union[type, EventFilter]]] = set()
+        self._hooks: _HookSet = set()
+        self._post_hooks: _HookSet = set()
 
     def __iter__(self) -> Iterator[Tuple[HookCallback, Union[type, EventFilter]]]:
         return iter(self._hooks)
 
-    def on(self, event: Union[type, EventFilter]) -> HookDecorator:  # noqa
-        """Register decorated function as listener for the given event."""
+    def post_hooks_iter(self) -> Iterator[Tuple[HookCallback, Union[type, EventFilter]]]:
+        """Iterator over the registered post-hooks"""
+        return iter(self._post_hooks)
+
+    def on(self, event: Union[type, EventFilter]) -> HookDecorator:
+        """Register decorated function to be called for events that match the given filter."""
+        return self._on(self._hooks, event)
+
+    def after(self, event: Union[type, EventFilter]) -> HookDecorator:
+        """Register decorated function to be called after an event that matches
+        the given filter is processed.
+        """
+        return self._on(self._post_hooks, event)
+
+    def _on(self, hooks: _HookSet, event: Union[type, EventFilter]) -> HookDecorator:
         if isinstance(event, type):
             event = event()
         assert isinstance(event, EventFilter), "Invalid event filter"
 
         def _decorator(func: HookCallback) -> HookCallback:
-            self._hooks.add((func, event))
+            hooks.add((func, event))
             return func
 
         return _decorator

@@ -24,7 +24,7 @@ class Bot(Client):
         logger: Optional[logging.Logger] = None,
         command_prefix: str = "/",
     ) -> None:
-        """The keyword arguments will be passed to Client superclass constructor."""
+        """If hooks is an instance of HookCollection, also its post-hooks will be registered."""
         self.command_prefix = command_prefix
         logger = logger or logging.getLogger("deltachat2.Bot")
         super().__init__(rpc, hooks, logger)

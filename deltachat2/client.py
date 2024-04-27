@@ -3,11 +3,11 @@
 import logging
 from typing import Callable, Dict, Iterable, Optional, Set, Tuple, Type, Union
 
-from .events import EventFilter, HookCallback, RawEvent
+from .events import EventFilter, HookCallback, HookCollection, RawEvent
 from .rpc import Rpc
 from .types import CoreEvent, Event
 
-_HookCollection = Dict[type, Set[Tuple[HookCallback, EventFilter]]]
+_HooksIndex = Dict[type, Set[Tuple[HookCallback, EventFilter]]]
 
 
 class Client:
@@ -19,11 +19,14 @@ class Client:
         hooks: Optional[Iterable[Tuple[HookCallback, Union[type, EventFilter]]]] = None,
         logger: Optional[logging.Logger] = None,
     ) -> None:
+        """If hooks is an instance of HookCollection, also its post-hooks will be registered."""
         self.rpc = rpc
         self.logger = logger or logging.getLogger("deltachat2.Client")
-        self._hooks: _HookCollection = {}
-        self._post_hooks: _HookCollection = {}
+        self._hooks: _HooksIndex = {}
+        self._post_hooks: _HooksIndex = {}
         self.add_hooks(hooks or [])
+        if isinstance(hooks, HookCollection):
+            self.add_post_hooks(hooks.post_hooks_iter())
 
     def add_hooks(self, hooks: Iterable[Tuple[HookCallback, Union[type, EventFilter]]]) -> None:
         """Register event hooks callbacks."""
@@ -96,7 +99,7 @@ class Client:
         self._notify(self._hooks, event, filter_type)
         self._notify(self._post_hooks, event, filter_type)
 
-    def _notify(self, hooks: _HookCollection, event: Event, filter_type: Type[EventFilter]) -> None:
+    def _notify(self, hooks: _HooksIndex, event: Event, filter_type: Type[EventFilter]) -> None:
         for hook, evfilter in hooks.get(filter_type, []):
             if evfilter.filter(event.event):
                 try:
