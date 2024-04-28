@@ -6,6 +6,7 @@ from typing import Callable, Iterable, Optional, Tuple, Union
 from .client import Client
 from .events import EventFilter, HookCallback, NewMessage
 from .rpc import Rpc
+from .transport import JsonRpcError
 from .types import Event, EventType, Message, NewMsgEvent, SpecialContactId
 
 
@@ -103,9 +104,14 @@ class Bot(Client):
             self._parse_command(accid, event)
         self._on_event(Event(accid, event), NewMessage)  # noqa
 
-    def _process_messages(self, accid: int) -> None:
-        for msgid in self.rpc.get_next_msgs(accid):
-            msg = self.rpc.get_message(accid, msgid)
-            if msg.from_id > SpecialContactId.LAST_SPECIAL:
-                self._on_new_msg(accid, msg)
-            self.rpc.set_config(accid, "last_msg_id", str(msgid))
+    def _process_messages(self, accid: int, retry=True) -> None:
+        try:
+            for msgid in self.rpc.get_next_msgs(accid):
+                msg = self.rpc.get_message(accid, msgid)
+                if msg.from_id > SpecialContactId.LAST_SPECIAL:
+                    self._on_new_msg(accid, msg)
+                self.rpc.set_config(accid, "last_msg_id", str(msgid))
+        except JsonRpcError as err:
+            self.logger.exception(err)
+            if retry:
+                self._process_messages(accid, False)
