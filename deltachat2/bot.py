@@ -107,7 +107,7 @@ class Bot(Client):
     def _is_incoming(self, accid: int, msg: Message) -> bool:
         if msg.from_id > SpecialContactId.LAST_SPECIAL:
             return True
-        if msg.from_id == SpecialContactId.SELF and !msg.is_bot:
+        if msg.from_id == SpecialContactId.SELF and not msg.is_bot:
             try:
                 community = self.rpc.get_config(accid, "is_community")
                 if community:
