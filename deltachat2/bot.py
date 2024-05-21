@@ -112,7 +112,7 @@ class Bot(Client):
                 community = self.rpc.get_config(accid, "is_community")
                 if community:
                     name = self.rpc.get_config(accid, "ui.community.selfname")
-                    if name and name != msg.override_sender_name:
+                    if name and name != msg.get("override_sender_name"):
                         return True
             except JsonRpcError:
                 pass
