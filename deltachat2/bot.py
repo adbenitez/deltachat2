@@ -109,7 +109,7 @@ class Bot(Client):
             return True
         if msg.from_id == SpecialContactId.SELF:
             try:
-                community = self.rpc.get_config(accid, "is_community")
+                community = self.rpc.get_config(accid, "is_community") == "1"
                 if community:
                     name = self.rpc.get_config(accid, "ui.community.selfname")
                     if name and name != msg.get("override_sender_name"):
