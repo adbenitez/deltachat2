@@ -19,6 +19,9 @@ classifiers = [
   "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
 ]
 
+[project.urls]
+Homepage = "https://github.com/adbenitez/deltachat2"
+
 [project.optional-dependencies]
 full = [
     "deltachat-rpc-server>=1.137.4",
