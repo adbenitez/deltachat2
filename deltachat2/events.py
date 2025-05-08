@@ -13,7 +13,7 @@ from typing import (
     Union,
 )
 
-from .types import CoreEvent, EventType, NewMsgEvent
+from .types import CoreEvent, EventType, NewMsgEvent, SpecialContactId
 
 if TYPE_CHECKING:
     from .bot import Bot
@@ -109,6 +109,9 @@ class NewMessage(EventFilter):
     :param is_bot: If set to True only match messages sent by bots, if set to None
                    match messages from bots and users. If omitted or set to False
                    only messages from users will be matched.
+    :param is_outgoing: If set to True only match outgoing messages, if set to None
+                   match both incoming and outgoing messages. If omitted or set to
+                   False only incoming messages will be matched.
     :param is_info: If set to True only match info/system messages, if set to False
                     only match messages that are not info/system messages. If omitted
                     info/system messages as well as normal messages will be matched.
@@ -126,11 +129,13 @@ class NewMessage(EventFilter):
         ] = None,
         command: Optional[str] = None,
         is_bot: Optional[bool] = False,
+        is_outgoing: Optional[bool] = False,
         is_info: Optional[bool] = None,
         func: Optional[Callable[[NewMsgEvent], bool]] = None,
     ) -> None:
         super().__init__(func=func)
         self.is_bot = is_bot
+        self.is_outgoing = is_outgoing
         self.is_info = is_info
         if command is not None and not isinstance(command, str):
             raise TypeError("Invalid command")
@@ -147,7 +152,9 @@ class NewMessage(EventFilter):
             raise TypeError("Invalid pattern type")
 
     def __hash__(self) -> int:
-        return hash((self.pattern, self.command, self.is_bot, self.is_info, self.func))
+        return hash(
+            (self.pattern, self.command, self.is_bot, self.is_outgoing, self.is_info, self.func)
+        )
 
     def __eq__(self, other) -> bool:
         if isinstance(other, NewMessage):
@@ -155,12 +162,14 @@ class NewMessage(EventFilter):
                 self.pattern,
                 self.command,
                 self.is_bot,
+                self.is_outgoing,
                 self.is_info,
                 self.func,
             ) == (
                 other.pattern,
                 other.command,
                 other.is_bot,
+                other.is_outgoing,
                 other.is_info,
                 other.func,
             )
@@ -170,6 +179,10 @@ class NewMessage(EventFilter):
         """Return True if the event matched the filter and should be used, or False otherwise."""
         assert isinstance(event, NewMsgEvent), "event must be an instance of NewMsgEvent"
         if self.is_bot is not None and self.is_bot != event.msg.is_bot:
+            return False
+        if self.is_outgoing is not None and self.is_outgoing != (
+            event.msg.from_id == SpecialContactId.SELF
+        ):
             return False
         if self.is_info is not None and self.is_info != event.msg.is_info:
             return False

@@ -64,7 +64,8 @@ class Bot(Client):
                     self._process_messages(acc_id)  # Process old messages.
 
         def _wrapper(event: Event) -> bool:
-            if event.event.kind == EventType.INCOMING_MSG:
+            kind = event.event.kind
+            if kind == EventType.INCOMING_MSG or kind == EventType.MSGS_CHANGED:
                 self._process_messages(event.account_id)
             return func(event)
 
@@ -104,25 +105,12 @@ class Bot(Client):
             self._parse_command(accid, event)
         self._on_event(Event(accid, event), NewMessage)  # noqa
 
-    def _is_incoming(self, accid: int, msg: Message) -> bool:
-        if msg.from_id > SpecialContactId.LAST_SPECIAL:
-            return True
-        if msg.from_id == SpecialContactId.SELF:
-            try:
-                community = self.rpc.get_config(accid, "is_community") == "1"
-                if community:
-                    name = self.rpc.get_config(accid, "ui.community.selfname")
-                    if name and name != msg.get("override_sender_name"):
-                        return True
-            except JsonRpcError:
-                pass
-        return False
-
     def _process_messages(self, accid: int, retry=True) -> None:
         try:
             for msgid in self.rpc.get_next_msgs(accid):
                 msg = self.rpc.get_message(accid, msgid)
-                if self._is_incoming(accid, msg):
+                outgoing = msg.from_id == SpecialContactId.SELF
+                if outgoing or msg.from_id > SpecialContactId.LAST_SPECIAL:
                     self._on_new_msg(accid, msg)
                 self.rpc.set_config(accid, "last_msg_id", str(msgid))
         except JsonRpcError as err:
