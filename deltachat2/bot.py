@@ -65,7 +65,7 @@ class Bot(Client):
 
         def _wrapper(event: Event) -> bool:
             kind = event.event.kind
-            if kind == EventType.INCOMING_MSG or kind == EventType.MSGS_CHANGED:
+            if kind in (EventType.INCOMING_MSG, EventType.MSGS_CHANGED):
                 self._process_messages(event.account_id)
             return func(event)
 
