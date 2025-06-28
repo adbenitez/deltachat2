@@ -8,9 +8,9 @@ hooks = events.HookCollection()
 
 
 @hooks.on(events.RawEvent)
-def log_event(_bot: Bot, accid: int, event: CoreEvent) -> None:
+def log_event(bot: Bot, accid: int, event: CoreEvent) -> None:
     """Log all core events for debugging."""
-    print(f"[accid={accid}] {event}")
+    bot.logger.info(f"[accid={accid}] {event}")
 
 
 @hooks.on(events.NewMessage)
