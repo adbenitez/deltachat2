@@ -19,6 +19,4 @@ class Rpc:
     def send_msg(self, accid: int, chatid: int, data: MsgData) -> int:
         """Send a message and return the message ID of the sent message."""
         json_obj = _snake2camel(dataclasses.asdict(data))
-        msgid = self.transport.call("send_msg", accid, chatid, json_obj)
-        self.markseen_msgs(accid, [msgid])
-        return msgid
+        return self.transport.call("send_msg", accid, chatid, json_obj)
