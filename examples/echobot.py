@@ -35,7 +35,8 @@ def main() -> None:
             if len(sys.argv) != 3:
                 print("ERROR: Account is not configured so email and password must be provided")
                 return
-            bot.configure(accid, sys.argv[1], sys.argv[2])
+            params = {"addr": sys.argv[1], "password": sys.argv[2]}
+            rpc.add_or_update_transport(accid, params)
 
         bot.run_forever()
 

@@ -68,9 +68,8 @@ def _run_cli(
         if not rpc.is_configured(accid):
             assert args.email, "Account is not configured and email must be provided"
             assert args.password, "Account is not configured and password must be provided"
-            configure_thread = Thread(
-                target=client.configure, args=(accid, args.email, args.password)
-            )
+            params = {"addr": args.email, "password": args.password}
+            configure_thread = Thread(target=rpc.add_or_update_transport, args=(accid, params))
             configure_thread.start()
 
         client.run_forever()
