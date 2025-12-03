@@ -1,7 +1,7 @@
 """Data classes and types from the JSON-RPC."""
 
 from dataclasses import dataclass
-from enum import Enum, IntEnum, StrEnum
+from enum import Enum, IntEnum
 from typing import Optional, Tuple
 
 from ._utils import AttrDict
@@ -71,7 +71,7 @@ class EventType(str, Enum):
     WEBXDC_INSTANCE_DELETED = "WebxdcInstanceDeleted"
 
 
-class ChatType(StrEnum):
+class ChatType(str, Enum):
 
     SINGLE = "Single"
     GROUP = "Group"
@@ -88,7 +88,7 @@ class ChatVisibility(str, Enum):
     PINNED = "Pinned"
 
 
-class DownloadState(StrEnum):
+class DownloadState(str, Enum):
 
     DONE = "Done"
     AVAILABLE = "Available"
@@ -155,7 +155,7 @@ class SpecialMessageId(IntEnum):
     LAST_SPECIAL = 9
 
 
-class EnteredCertificateChecks(StrEnum):
+class EnteredCertificateChecks(str, Enum):
     # `Automatic` means that provider database setting should be taken. If there is no provider database setting for certificate checks, check certificates strictly.
     AUTOMATIC = "automatic"
 
