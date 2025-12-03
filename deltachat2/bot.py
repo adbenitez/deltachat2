@@ -30,13 +30,6 @@ class Bot(Client):
         logger = logger or logging.getLogger("deltachat2.Bot")
         super().__init__(rpc, hooks, logger)
 
-    def configure(self, account_id: int, email: str, password: str, **kwargs) -> None:
-        """Configure the account with the given account ID."""
-        kwargs.setdefault("bot", "1")
-        kwargs.setdefault("delete_server_after", "1")
-        kwargs.setdefault("bcc_self", "0")
-        super().configure(account_id, email, password, **kwargs)
-
     def has_command(self, command: str) -> bool:
         """Return True if the bot has a hook/callback registered for the given command,
         False otherwise."""

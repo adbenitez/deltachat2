@@ -7,7 +7,7 @@ name = "deltachat2"
 description = "Client library for Delta Chat core JSON-RPC interface"
 dynamic = ["version"]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 keywords = ["deltachat"]
 authors = [
   {name = "adbenitez", email = "adb@merlinux.eu"},
@@ -24,7 +24,7 @@ Homepage = "https://github.com/adbenitez/deltachat2"
 
 [project.optional-dependencies]
 full = [
-    "deltachat-rpc-server>=2.14.0",
+    "deltachat-rpc-server>=2.29.0",
 ]
 dev = [
   "deltachat-rpc-server",

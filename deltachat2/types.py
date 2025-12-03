@@ -1,7 +1,7 @@
 """Data classes and types from the JSON-RPC."""
 
 from dataclasses import dataclass
-from enum import Enum, IntEnum
+from enum import Enum, IntEnum, StrEnum
 from typing import Optional, Tuple
 
 from ._utils import AttrDict
@@ -71,14 +71,13 @@ class EventType(str, Enum):
     WEBXDC_INSTANCE_DELETED = "WebxdcInstanceDeleted"
 
 
-class ChatType(IntEnum):
-    """Chat types"""
+class ChatType(StrEnum):
 
-    UNDEFINED = 0
-    SINGLE = 100
-    GROUP = 120
-    MAILINGLIST = 140
-    BROADCAST = 160
+    SINGLE = "Single"
+    GROUP = "Group"
+    MAILINGLIST = "Mailinglist"
+    OUT_BROADCAST = "OutBroadcast"
+    IN_BROADCAST = "InBroadcast"
 
 
 class ChatVisibility(str, Enum):
@@ -89,12 +88,12 @@ class ChatVisibility(str, Enum):
     PINNED = "Pinned"
 
 
-class DownloadState(str, Enum):
-    """Message download state"""
+class DownloadState(StrEnum):
 
     DONE = "Done"
     AVAILABLE = "Available"
     FAILURE = "Failure"
+    UNDECIPHERABLE = "Undecipherable"
     IN_PROGRESS = "InProgress"
 
 
@@ -156,12 +155,15 @@ class SpecialMessageId(IntEnum):
     LAST_SPECIAL = 9
 
 
-class CertificateChecks(IntEnum):
-    """Certificate checks mode"""
+class EnteredCertificateChecks(StrEnum):
+    # `Automatic` means that provider database setting should be taken. If there is no provider database setting for certificate checks, check certificates strictly.
+    AUTOMATIC = "automatic"
 
-    AUTOMATIC = 0
-    STRICT = 1
-    ACCEPT_INVALID_CERTIFICATES = 3
+    # Ensure that TLS certificate is valid for the server hostname.
+    STRICT = "strict"
+
+    # Accept certificates that are expired, self-signed or otherwise not valid for the server hostname.
+    ACCEPT_INVALID_CERTIFICATES = "acceptInvalidCertificates"
 
 
 class Connectivity(IntEnum):

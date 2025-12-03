@@ -60,14 +60,6 @@ class Client:
         event2 = event() if isinstance(event, type) else event
         self._post_hooks.get(type(event2), set()).remove((hook, event2))
 
-    def configure(self, account_id: int, email: str, password: str, **kwargs) -> None:
-        """Configure the account with the given account ID."""
-        self.rpc.set_config(account_id, "addr", email)
-        self.rpc.set_config(account_id, "mail_pw", password)
-        if kwargs:
-            self.rpc.batch_set_config(account_id, kwargs)
-        self.rpc.configure(account_id)
-
     def run_forever(self, account_id: int = 0) -> None:
         """Process events forever.
 
