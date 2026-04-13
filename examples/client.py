@@ -1,7 +1,6 @@
 """Minimal/simple single-account client example boilerplate."""
 
 import subprocess
-import sys
 
 from deltachat2 import Client, CoreEvent, IOTransport, Rpc, events
 
@@ -25,11 +24,7 @@ def main() -> None:
         accid = accounts[0] if accounts else rpc.add_account()
 
         if not rpc.is_configured(accid):
-            if len(sys.argv) != 3:
-                print("ERROR: Account is not configured so email and password must be provided")
-                return
-            params = {"addr": sys.argv[1], "password": sys.argv[2]}
-            rpc.add_or_update_transport(accid, params)
+            rpc.add_transport_from_qr(accid, "dcaccount:nine.testrun.org")
 
         client.run_forever()
 
