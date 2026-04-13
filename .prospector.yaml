@@ -1,0 +1,20 @@
+strictness: medium
+test-warnings: true
+doc-warnings: false
+
+ignore-paths:
+  - docs
+  - build
+
+ignore-patterns:
+  - (^|/)skip(this)?(/|$)
+
+pycodestyle:
+  options:
+    max-line-length: 100
+
+mccabe:
+  run: false
+
+mypy:
+  run: true

@@ -24,16 +24,13 @@ Homepage = "https://github.com/adbenitez/deltachat2"
 
 [project.optional-dependencies]
 full = [
-    "deltachat-rpc-server>=2.35.0",
+    "deltachat-rpc-server>=2.49.0",
 ]
 dev = [
   "deltachat-rpc-server",
   "black",
-  "mypy",
   "isort",
-  "pylint",
-  "pylama",
-  "pytest",
+  "prospector[with-mypy]",
 ]
 
 [tool.setuptools_scm]

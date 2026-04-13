@@ -1,6 +1,6 @@
 """Delta Chat client library using deltachat-rpc-server"""
 
-# pylama:ignore=W0611,W0401
+# flake8: noqa
 from .bot import Bot
 from .client import Client
 from .rpc import Rpc
