@@ -16,7 +16,7 @@ To use this library, you need to have `deltachat-rpc-server` program installed,
 you can install it together with this library with:
 
 ```sh
-pip install deltachat2[full]
+pip install 'deltachat2[full]'
 ```
 
 ## Usage
@@ -24,34 +24,52 @@ pip install deltachat2[full]
 Example echo-bot written with deltachat2:
 
 ```python
-from deltachat2 import events, run_bot_cli
+from deltachat2 import Bot, CoreEvent, IOTransport, MsgData, NewMsgEvent, Rpc, events
 
 hooks = events.HookCollection()
 
+
 @hooks.on(events.RawEvent)
-def log_event(bot, accid, event):
-    bot.logger.info(event)
+def log_event(_bot: Bot, _accid: int, event: CoreEvent) -> None:
+    """Log all core events for debugging."""
+    print(event)
+
 
 @hooks.on(events.NewMessage)
-def echo(bot, accid, event):
+def echo(bot: Bot, accid: int, event: NewMsgEvent) -> None:
+    """Echo back any text message"""
     msg = event.msg
-    bot.rpc.misc_send_text_message(accid, msg.chat_id, msg.text)
+    bot.rpc.send_msg(accid, msg.chat_id, MsgData(text=msg.text))
+
 
 if __name__ == "__main__":
-    run_bot_cli(hooks)
+    with IOTransport() as trans:
+        rpc = Rpc(trans)
+        bot = Bot(rpc, hooks)
+
+        accounts = rpc.get_all_account_ids()
+        accid = accounts[0] if accounts else rpc.add_account()
+
+        if not rpc.is_configured(accid):
+            rpc.set_config(accid, "bot", "1")
+            rpc.add_transport_from_qr(accid, "dcaccount:nine.testrun.org")
+
+        link = rpc.get_chat_securejoin_qr_code(accid, None)
+        print(f"Listening at: {link}")
+        bot.run_forever()
 ```
 
 Save the above code in a `echobot.py` file and run it with Python:
 
 ```
-python echobot.py --email bot@example.com --password MyPassword
+python echobot.py
 ```
 
-Then write to the bot address using your Delta Chat client to test it is working.
+Then write to the bot using the invite link that will be printed in the screen.
 
 ## Developing bots faster ⚡
 
-If what you want is to develop bots, you probably should use this library together with
-[deltabot-cli-py](https://github.com/deltachat-bot/deltabot-cli-py/), it takes away the
-repetitive process of creating the bot CLI and let you focus on writing your message
-processing logic.
+If you want to develop bots, you probably should use this library together with
+[deltabot-cli-py](https://github.com/deltachat-bot/deltabot-cli-py/), it takes away
+the repetitive process of creating the bot CLI and let you focus on writing your
+message processing logic.

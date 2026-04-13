@@ -1,6 +1,6 @@
 """Advanced single-account echo-bot example."""
 
-import sys
+from threading import Thread
 
 from deltachat2 import (
     Bot,
@@ -20,11 +20,11 @@ hooks = events.HookCollection()
 def log_event(bot: Bot, accid: int, event: CoreEvent) -> None:
     """Log all core events for debugging."""
     if event.kind == EventType.INFO:
-        bot.logger.debug(event.msg)
+        print("DEBUG", event.msg)
     elif event.kind == EventType.WARNING:
-        bot.logger.warning(event.msg)
+        print("WARNING", event.msg)
     elif event.kind == EventType.ERROR:
-        bot.logger.error(event.msg)
+        print("ERROR", event.msg)
     elif event.kind == EventType.MSG_DELIVERED:
         bot.rpc.delete_messages(accid, [event.msg_id])
 
@@ -52,14 +52,18 @@ def main() -> None:
         accounts = rpc.get_all_account_ids()
         accid = accounts[0] if accounts else rpc.add_account()
 
-        print("Running deltachat core", rpc.get_system_info().deltachat_core_version)
-
         if not rpc.is_configured(accid):
-            if len(sys.argv) != 3:
-                print("ERROR: Account is not configured so email and password must be provided")
-                return
-            params = {"addr": sys.argv[1], "password": sys.argv[2]}
-            rpc.add_or_update_transport(accid, params)
+
+            def configure():
+                rpc.set_config(accid, "bot", "1")
+                rpc.add_transport_from_qr(accid, "dcaccount:nine.testrun.org")
+                link = rpc.get_chat_securejoin_qr_code(accid, None)
+                print(f"Listening at: {link}")
+
+            Thread(target=configure).start()
+        else:
+            link = rpc.get_chat_securejoin_qr_code(accid, None)
+            print(f"Listening at: {link}")
 
         bot.run_forever()
 
