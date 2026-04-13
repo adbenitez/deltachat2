@@ -3,19 +3,17 @@
 import argparse
 import sys
 from threading import Thread
-from typing import Callable, Iterable, Optional, Tuple, Type, Union
+from typing import Optional
 
 from .bot import Bot
 from .client import Client
-from .events import EventFilter
+from .events import HooksIterable
 from .rpc import Rpc
 from .transport import IOTransport
 
 
 def run_client_cli(
-    hooks: Optional[Iterable[Tuple[Callable, Union[type, EventFilter]]]] = None,
-    argv: Optional[list] = None,
-    **kwargs,
+    hooks: Optional[HooksIterable] = None, argv: Optional[list] = None, **kwargs
 ) -> None:
     """Run a simple command line app, using the given hooks.
 
@@ -25,9 +23,7 @@ def run_client_cli(
 
 
 def run_bot_cli(
-    hooks: Optional[Iterable[Tuple[Callable, Union[type, EventFilter]]]] = None,
-    argv: Optional[list] = None,
-    **kwargs,
+    hooks: Optional[HooksIterable] = None, argv: Optional[list] = None, **kwargs
 ) -> None:
     """Run a simple bot command line using the given hooks.
 
@@ -37,8 +33,8 @@ def run_bot_cli(
 
 
 def _run_cli(
-    client_type: Type["Client"],
-    hooks: Optional[Iterable[Tuple[Callable, Union[type, EventFilter]]]] = None,
+    client_type: type["Client"],
+    hooks: Optional[HooksIterable] = None,
     argv: Optional[list] = None,
     **kwargs,
 ) -> None:

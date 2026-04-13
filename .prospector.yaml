@@ -10,8 +10,14 @@ ignore-patterns:
   - (^|/)skip(this)?(/|$)
 
 pycodestyle:
-  options:
-    max-line-length: 100
+  disable:
+    - E501
+
+pylint:
+  disable:
+     - line-too-long
+     - too-many-positional-arguments
+     - too-many-arguments
 
 mccabe:
   run: false

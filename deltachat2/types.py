@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Optional, Tuple
+from typing import Optional
 
 from ._utils import AttrDict
 
@@ -271,7 +271,7 @@ class MsgData:
     html: Optional[str] = None
     viewtype: Optional[MessageViewtype] = None
     file: Optional[str] = None
-    location: Optional[Tuple[float, float]] = None
+    location: Optional[tuple[float, float]] = None
     override_sender_name: Optional[str] = None
     quoted_message_id: Optional[int] = None
 

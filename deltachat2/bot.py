@@ -1,13 +1,13 @@
 """Event loop implementations offering high level event handling/hooking for bots."""
 
 import logging
-from typing import Callable, Iterable, Optional, Tuple, Union
+from typing import Callable, Optional
 
 from .client import Client
-from .events import EventFilter, HookCallback, NewMessage
+from .events import HooksIterable, NewMessage
 from .rpc import Rpc
 from .transport import JsonRpcError
-from .types import Event, EventType, Message, NewMsgEvent, SpecialContactId
+from .types import Event, EventType, NewMsgEvent, SpecialContactId
 
 
 class Bot(Client):
@@ -19,7 +19,7 @@ class Bot(Client):
     def __init__(
         self,
         rpc: Rpc,
-        hooks: Optional[Iterable[Tuple[HookCallback, Union[type, EventFilter]]]] = None,
+        hooks: Optional[HooksIterable] = None,
         logger: Optional[logging.Logger] = None,
         command_prefix: str = "/",
     ) -> None:

@@ -9,7 +9,7 @@ import sys
 from abc import ABC, abstractmethod
 from queue import Queue
 from threading import Event, Thread
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Iterator, Optional
 
 from ._utils import to_attrdict
 
@@ -56,7 +56,7 @@ class IOTransport:
         self.process: subprocess.Popen
         self.id_iterator: Iterator[int]
         # Map from request ID to the result.
-        self.pending_results: Dict[int, _Result]
+        self.pending_results: dict[int, _Result]
         self.request_queue: Queue
         self.closing: bool
         self.reader_thread: Thread
@@ -70,7 +70,7 @@ class IOTransport:
         else:
             # `process_group` is not supported before Python 3.11.
             kwargs = {"preexec_fn": os.setpgrp, **self._kwargs}  # noqa: PLW1509
-        self.process = subprocess.Popen(  # noqa: R1732
+        self.process = subprocess.Popen(  # pylint:disable=consider-using-with
             "deltachat-rpc-server",
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

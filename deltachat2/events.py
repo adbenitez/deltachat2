@@ -8,8 +8,6 @@ from typing import (
     Iterable,
     Iterator,
     Optional,
-    Set,
-    Tuple,
     Union,
 )
 
@@ -195,7 +193,8 @@ class NewMessage(EventFilter):
         return super()._call_func(event)
 
 
-_HookSet = Set[Tuple[HookCallback, Union[type, EventFilter]]]
+HooksIterable = Iterable[tuple[HookCallback, Union[type[EventFilter], EventFilter]]]
+_HookSet = set[tuple[HookCallback, Union[type[EventFilter], EventFilter]]]
 
 
 class HookCollection:
@@ -208,24 +207,26 @@ class HookCollection:
         self._hooks: _HookSet = set()
         self._post_hooks: _HookSet = set()
 
-    def __iter__(self) -> Iterator[Tuple[HookCallback, Union[type, EventFilter]]]:
+    def __iter__(self) -> Iterator[tuple[HookCallback, Union[type[EventFilter], EventFilter]]]:
         return iter(self._hooks)
 
-    def post_hooks_iter(self) -> Iterator[Tuple[HookCallback, Union[type, EventFilter]]]:
+    def post_hooks_iter(
+        self,
+    ) -> Iterator[tuple[HookCallback, Union[type[EventFilter], EventFilter]]]:
         """Iterator over the registered post-hooks"""
         return iter(self._post_hooks)
 
-    def on(self, event: Union[type, EventFilter]) -> HookDecorator:
+    def on(self, event: Union[type[EventFilter], EventFilter]) -> HookDecorator:
         """Register decorated function to be called for events that match the given filter."""
         return self._on(self._hooks, event)
 
-    def after(self, event: Union[type, EventFilter]) -> HookDecorator:
+    def after(self, event: Union[type[EventFilter], EventFilter]) -> HookDecorator:
         """Register decorated function to be called after an event that matches
         the given filter is processed.
         """
         return self._on(self._post_hooks, event)
 
-    def _on(self, hooks: _HookSet, event: Union[type, EventFilter]) -> HookDecorator:
+    def _on(self, hooks: _HookSet, event: Union[type[EventFilter], EventFilter]) -> HookDecorator:
         if isinstance(event, type):
             event = event()
         assert isinstance(event, EventFilter), "Invalid event filter"
