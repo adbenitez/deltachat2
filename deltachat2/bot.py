@@ -11,11 +11,9 @@ from .types import Event, EventType, Message, NewMsgEvent, SpecialContactId
 
 
 class Bot(Client):
-    """A Delta Chat client with the bot setting set to 1.
+    """A Delta Chat client for bots.
 
-    This bot client triggers "NewMessage" highlevel events
-    in addition to raw core events. The account will have the settings bcc_self set to 0,
-    and delete_server_after set to 1.
+    This bot client triggers "NewMessage" highlevel events in addition to raw core events.
     """
 
     def __init__(
@@ -49,17 +47,12 @@ class Bot(Client):
         if account_id:
             if self.rpc.is_configured(account_id):
                 self.rpc.start_io(account_id)
-                self._process_messages(account_id)  # Process old messages.
         else:
             self.rpc.start_io_for_all_accounts()
-            for acc_id in self.rpc.get_all_account_ids():
-                if self.rpc.is_configured(acc_id):
-                    self._process_messages(acc_id)  # Process old messages.
 
         def _wrapper(event: Event) -> bool:
-            kind = event.event.kind
-            if kind in (EventType.INCOMING_MSG, EventType.MSGS_CHANGED):
-                self._process_messages(event.account_id)
+            if event.event.kind == EventType.INCOMING_MSG:
+                self._process_message(event.account_id, event.event.msg_id)
             return func(event)
 
         return super().run_until(_wrapper, account_id)
@@ -92,21 +85,13 @@ class Bot(Client):
         event.command = cmd
         event.payload = payload
 
-    def _on_new_msg(self, accid: int, msg: Message) -> None:
-        event = NewMsgEvent(command="", payload="", msg=msg)
-        if not msg.is_info and msg.text.startswith(self.command_prefix):
-            self._parse_command(accid, event)
-        self._on_event(Event(accid, event), NewMessage)  # noqa
-
-    def _process_messages(self, accid: int, retry=True) -> None:
+    def _process_message(self, accid: int, msgid: int) -> None:
         try:
-            for msgid in self.rpc.get_next_msgs(accid):
-                msg = self.rpc.get_message(accid, msgid)
-                outgoing = msg.from_id == SpecialContactId.SELF
-                if outgoing or msg.from_id > SpecialContactId.LAST_SPECIAL:
-                    self._on_new_msg(accid, msg)
-                self.rpc.set_config(accid, "last_msg_id", str(msgid))
+            msg = self.rpc.get_message(accid, msgid)
+            if msg.from_id > SpecialContactId.LAST_SPECIAL:
+                event = NewMsgEvent(command="", payload="", msg=msg)
+                if not msg.is_info and msg.text.startswith(self.command_prefix):
+                    self._parse_command(accid, event)
+                self._on_event(Event(accid, event), NewMessage)  # noqa
         except JsonRpcError as err:
             self.logger.exception(err)
-            if retry:
-                self._process_messages(accid, False)
