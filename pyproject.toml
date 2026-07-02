@@ -18,13 +18,16 @@ classifiers = [
   "Intended Audience :: Developers",
   "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
 ]
+dependencies = [
+  "dacite>=1.9.2,<2",
+]
 
 [project.urls]
 Homepage = "https://github.com/adbenitez/deltachat2"
 
 [project.optional-dependencies]
 full = [
-    "deltachat-rpc-server>=2.49.0",
+    "deltachat-rpc-server>=2.53.0",
 ]
 dev = [
   "deltachat-rpc-server",
