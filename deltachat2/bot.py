@@ -4,10 +4,10 @@ import logging
 from typing import Callable, Optional
 
 from .client import Client
-from .events import HooksIterable, NewMessage
+from .events import HooksIterable, NewMessage, NewMsgEvent
 from .rpc import Rpc
 from .transport import JsonRpcError
-from .types import Event, EventType, NewMsgEvent, SpecialContactId
+from .types import Event, EventTypeIncomingMsg, SpecialContactId
 
 
 class Bot(Client):
@@ -51,8 +51,8 @@ class Bot(Client):
             self.rpc.start_io_for_all_accounts()
 
         def _wrapper(event: Event) -> bool:
-            if event.event.kind == EventType.INCOMING_MSG:
-                self._process_message(event.account_id, event.event.msg_id)
+            if isinstance(event.event, EventTypeIncomingMsg):
+                self._process_message(event.context_id, event.event.msg_id)
             return func(event)
 
         return super().run_until(_wrapper, account_id)
@@ -92,6 +92,6 @@ class Bot(Client):
                 event = NewMsgEvent(command="", payload="", msg=msg)
                 if not msg.is_info and msg.text.startswith(self.command_prefix):
                     self._parse_command(accid, event)
-                self._on_event(Event(accid, event), NewMessage)  # noqa
+                self._on_event(Event(context_id=accid, event=event), NewMessage)  # noqa
         except JsonRpcError as err:
             self.logger.exception(err)

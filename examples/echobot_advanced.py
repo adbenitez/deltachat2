@@ -4,10 +4,13 @@ from threading import Thread
 
 from deltachat2 import (
     Bot,
-    CoreEvent,
     EventType,
+    EventTypeError,
+    EventTypeInfo,
+    EventTypeMsgDelivered,
+    EventTypeWarning,
     IOTransport,
-    MsgData,
+    MessageData,
     NewMsgEvent,
     Rpc,
     events,
@@ -17,16 +20,17 @@ hooks = events.HookCollection()
 
 
 @hooks.on(events.RawEvent)
-def log_event(bot: Bot, accid: int, event: CoreEvent) -> None:
+def log_event(bot: Bot, accid: int, event: EventType) -> None:
     """Log all core events for debugging."""
-    if event.kind == EventType.INFO:
-        print("DEBUG", event.msg)
-    elif event.kind == EventType.WARNING:
-        print("WARNING", event.msg)
-    elif event.kind == EventType.ERROR:
-        print("ERROR", event.msg)
-    elif event.kind == EventType.MSG_DELIVERED:
-        bot.rpc.delete_messages(accid, [event.msg_id])
+    match event:
+        case EventTypeInfo():
+            print("DEBUG", event.msg)
+        case EventTypeWarning():
+            print("WARNING", event.msg)
+        case EventTypeError():
+            print("ERROR", event.msg)
+        case EventTypeMsgDelivered():
+            bot.rpc.delete_messages(accid, [event.msg_id])
 
 
 @hooks.on(events.NewMessage)
@@ -34,7 +38,7 @@ def echo(bot: Bot, accid: int, event: NewMsgEvent) -> None:
     """Echo back any text message"""
     msg = event.msg
     bot.rpc.markseen_msgs(accid, [msg.id])
-    bot.rpc.send_msg(accid, msg.chat_id, MsgData(text=msg.text))
+    bot.rpc.send_msg(accid, msg.chat_id, MessageData(text=msg.text))
 
 
 @hooks.after(events.NewMessage)
