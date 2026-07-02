@@ -42,6 +42,9 @@ dev = [
 [tool.setuptools]
 packages = ["deltachat2"]
 
+[tool.setuptools.package-data]
+deltachat2 = ["py.typed"]
+
 [tool.black]
 line-length = 100
 
