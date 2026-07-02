@@ -1,12 +1,20 @@
 """Simple single-profile echo-bot example."""
 
-from deltachat2 import Bot, CoreEvent, IOTransport, MsgData, NewMsgEvent, Rpc, events
+from deltachat2 import (
+    Bot,
+    EventType,
+    IOTransport,
+    MessageData,
+    NewMsgEvent,
+    Rpc,
+    events,
+)
 
 hooks = events.HookCollection()
 
 
 @hooks.on(events.RawEvent)
-def log_event(_bot: Bot, _accid: int, event: CoreEvent) -> None:
+def log_event(_bot: Bot, _accid: int, event: EventType) -> None:
     """Log all core events for debugging."""
     print(event)
 
@@ -15,7 +23,7 @@ def log_event(_bot: Bot, _accid: int, event: CoreEvent) -> None:
 def echo(bot: Bot, accid: int, event: NewMsgEvent) -> None:
     """Echo back any text message"""
     msg = event.msg
-    bot.rpc.send_msg(accid, msg.chat_id, MsgData(text=msg.text))
+    bot.rpc.send_msg(accid, msg.chat_id, MessageData(text=msg.text))
 
 
 if __name__ == "__main__":

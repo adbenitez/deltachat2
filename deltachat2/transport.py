@@ -1,4 +1,4 @@
-"""JSON-RPC transports to communicate with Delta Chat core."""
+"""JSON-RPC transports to communicate with chatmail core."""
 
 import itertools
 import json
@@ -9,9 +9,7 @@ import sys
 from abc import ABC, abstractmethod
 from queue import Queue
 from threading import Event, Thread
-from typing import Any, Iterator, Optional
-
-from ._utils import to_attrdict
+from typing import Any, Dict, Iterator, Optional
 
 
 class JsonRpcError(Exception):
@@ -19,31 +17,36 @@ class JsonRpcError(Exception):
 
 
 class RpcTransport(ABC):
-    """Delta Chat RPC client's transport."""
+    """Chatmail RPC client's transport."""
 
     @abstractmethod
     def call(self, method: str, *args) -> Any:
         """Request the RPC server to call a function and return its return value if any."""
 
 
-class _Result(Event):
+class _Result:
     def __init__(self) -> None:
         self._value: Any = None
-        super().__init__()
+        self._event = Event()
 
-    def set(self, value: Any) -> None:  # noqa
+    def set(self, value: Any) -> None:
         self._value = value
-        super().set()
+        self._event.set()
 
-    def wait(self) -> Any:  # noqa
-        super().wait()
+    def wait(self) -> Any:
+        self._event.wait()
         return self._value
 
 
 class IOTransport:
-    """Delta Chat RPC transport over IO using external deltachat-rpc-server program."""
+    """Chatmail RPC transport over IO using external deltachat-rpc-server program."""
 
-    def __init__(self, accounts_dir: Optional[str] = None, **kwargs):
+    def __init__(
+        self,
+        accounts_dir: Optional[str] = None,
+        rpc_executable: str = "deltachat-rpc-server",
+        **kwargs,
+    ):
         """The given arguments will be passed to subprocess.Popen()"""
         self.logger = logging.getLogger("deltachat2.IOTransport")
         if accounts_dir:
@@ -51,12 +54,12 @@ class IOTransport:
                 **kwargs.get("env", os.environ),
                 "DC_ACCOUNTS_PATH": str(accounts_dir),
             }
-
+        self.rpc_executable = rpc_executable
         self._kwargs = kwargs
         self.process: subprocess.Popen
         self.id_iterator: Iterator[int]
         # Map from request ID to the result.
-        self.pending_results: dict[int, _Result]
+        self.pending_results: Dict[int, _Result]
         self.request_queue: Queue
         self.closing: bool
         self.reader_thread: Thread
@@ -69,9 +72,9 @@ class IOTransport:
             kwargs = {"process_group": 0, **self._kwargs}
         else:
             # `process_group` is not supported before Python 3.11.
-            kwargs = {"preexec_fn": os.setpgrp, **self._kwargs}  # noqa: PLW1509
-        self.process = subprocess.Popen(  # pylint:disable=consider-using-with
-            "deltachat-rpc-server",
+            kwargs = {"preexec_fn": os.setpgrp, **self._kwargs}
+        self.process = subprocess.Popen(  # noqa: consider-using-with
+            self.rpc_executable,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             **kwargs,
@@ -149,5 +152,5 @@ class IOTransport:
         if "error" in response:
             raise JsonRpcError(response["error"])
         if "result" in response:
-            return to_attrdict(response["result"])
+            return response["result"]
         return None

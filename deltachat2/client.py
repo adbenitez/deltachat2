@@ -5,7 +5,7 @@ from typing import Callable, Optional, TypeVar, Union
 
 from .events import EventFilter, HookCallback, HookCollection, HooksIterable, RawEvent
 from .rpc import Rpc
-from .types import CoreEvent, Event
+from .types import Event
 
 T = TypeVar("T", bound=EventFilter)
 _HooksIndex = dict[type[T], set[tuple[HookCallback, T]]]
@@ -86,8 +86,7 @@ class Client:
             self.rpc.start_io_for_all_accounts()
 
         while True:
-            raw_event = self.rpc.get_next_event()
-            event = Event(raw_event.context_id, CoreEvent(raw_event.event))
+            event = self.rpc.get_next_event()
             self._on_event(event, RawEvent)
             if func(event):
                 return event
@@ -100,6 +99,6 @@ class Client:
         for hook, evfilter in hooks.get(filter_type, []):
             if evfilter.filter(event.event):
                 try:
-                    hook(self, event.account_id, event.event)  # noqa
+                    hook(self, event.context_id, event.event)  # noqa
                 except Exception as ex:
                     self.logger.exception(ex)

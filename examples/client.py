@@ -2,13 +2,13 @@
 
 import subprocess
 
-from deltachat2 import Client, CoreEvent, IOTransport, Rpc, events
+from deltachat2 import Client, EventType, IOTransport, Rpc, events
 
 hooks = events.HookCollection()
 
 
 @hooks.on(events.RawEvent)
-def log_event(_client: Client, accid: int, event: CoreEvent) -> None:
+def log_event(_client: Client, accid: int, event: EventType) -> None:
     """here you should process events and update UI."""
     print(f"[accid={accid}] {event}")
 

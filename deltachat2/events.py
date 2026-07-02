@@ -2,6 +2,7 @@
 
 import re
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -9,28 +10,39 @@ from typing import (
     Iterator,
     Optional,
     Union,
+    get_args,
 )
 
-from .types import CoreEvent, EventType, NewMsgEvent, SpecialContactId
+from .types import EventType, Message, SpecialContactId
+
+
+@dataclass
+class NewMsgEvent:
+    """New message bot-specific event"""
+
+    command: str
+    payload: str
+    msg: Message
+
 
 if TYPE_CHECKING:
     from .bot import Bot
     from .client import Client
-ClientHookCallback = Callable[["Client", int, CoreEvent], None]
+ClientHookCallback = Callable[["Client", int, EventType], None]
 BotHookCallback = Union[
-    Callable[["Bot", int, CoreEvent], None], Callable[["Bot", int, NewMsgEvent], None]
+    Callable[["Bot", int, EventType], None], Callable[["Bot", int, NewMsgEvent], None]
 ]
 HookCallback = Union[ClientHookCallback, BotHookCallback]
 HookDecorator = Callable[[HookCallback], HookCallback]
 
 
-def _tuple_of(obj, type_: type) -> tuple:
+def _tuple_of_eventtype(obj) -> tuple:
     if not obj:
         return ()
-    if isinstance(obj, type_):
+    types = get_args(EventType)
+    if isinstance(obj, types):
         obj = (obj,)
-
-    if not all(isinstance(elem, type_) for elem in obj):
+    if not all(isinstance(elem, types) for elem in obj):
         raise TypeError()
     return tuple(obj)
 
@@ -52,13 +64,13 @@ class EventFilter(ABC):
     def __ne__(self, other):
         return not self == other
 
-    def _call_func(self, event: Union[CoreEvent, NewMsgEvent]) -> bool:
+    def _call_func(self, event: Union[EventType, NewMsgEvent]) -> bool:
         if not self.func:
             return True
         return bool(self.func(event))
 
     @abstractmethod
-    def filter(self, event: Union[CoreEvent, NewMsgEvent]):
+    def filter(self, event: Union[EventType, NewMsgEvent]):
         """Return True if the event matched the filter and should be used, or False otherwise."""
 
 
@@ -66,18 +78,18 @@ class RawEvent(EventFilter):
     """Matches raw core events.
 
     :param types: The types of event to match.
-    :param func: A Callable that should accept the CoreEvent as parameter, and return
+    :param func: A Callable that should accept the EventType as parameter, and return
                  a boolean value indicating whether the event should be dispatched or not.
     """
 
     def __init__(
         self,
         types: Union[None, EventType, Iterable[EventType]] = None,
-        func: Optional[Callable[[CoreEvent], bool]] = None,
+        func: Optional[Callable[[EventType], bool]] = None,
     ):
         super().__init__(func=func)
         try:
-            self.types = _tuple_of(types, EventType)
+            self.types = _tuple_of_eventtype(types)
         except TypeError as err:
             raise TypeError(f"Invalid event type given: {types}") from err
 
@@ -89,10 +101,9 @@ class RawEvent(EventFilter):
             return (self.types, self.func) == (other.types, other.func)
         return False
 
-    def filter(self, event: Union[CoreEvent, NewMsgEvent]) -> bool:
+    def filter(self, event: Union[EventType, NewMsgEvent]) -> bool:
         """Return True if the event matched the filter and should be used, or False otherwise."""
-        assert isinstance(event, CoreEvent), "event must be an instance of CoreEvent"
-        if self.types and event.kind not in self.types:
+        if self.types and type(event) not in self.types:
             return False
         return self._call_func(event)
 
@@ -173,7 +184,7 @@ class NewMessage(EventFilter):
             )
         return False
 
-    def filter(self, event: Union[CoreEvent, NewMsgEvent]) -> bool:
+    def filter(self, event: Union[EventType, NewMsgEvent]) -> bool:
         """Return True if the event matched the filter and should be used, or False otherwise."""
         assert isinstance(event, NewMsgEvent), "event must be an instance of NewMsgEvent"
         if self.is_bot is not None and self.is_bot != event.msg.is_bot:
