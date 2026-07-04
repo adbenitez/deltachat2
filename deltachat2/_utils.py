@@ -1,6 +1,5 @@
 """Internal utilities"""
 
-# flake8: noqa
 import dataclasses
 import re
 from typing import Any
@@ -21,6 +20,7 @@ def snake2camel(name: str) -> str:
 
 
 def camel2snake_dict(arg: Any) -> Any:
+    """Recursively convert a dict with camelCase keys into a dict with snake_case keys."""
     if isinstance(arg, dict):
         return {camel2snake(key): camel2snake_dict(value) for key, value in arg.items()}
     if isinstance(arg, list):
@@ -29,10 +29,11 @@ def camel2snake_dict(arg: Any) -> Any:
 
 
 def snakeclass2cameldict(arg: Any) -> Any:
+    """Convert a dataclass with snake_case fields into a dict with camelCase keys"""
     if dataclasses.is_dataclass(arg):
         return {snake2camel(key): value for key, value in dataclasses.asdict(arg).items()}
     if isinstance(arg, list):
-        return [snake2camel_dict(elem) for elem in arg]
+        return [snakeclass2cameldict(elem) for elem in arg]
     if isinstance(arg, dict):
-        return {key: snake2camel_dict(val) for key, val in arg.items()}
+        return {key: snakeclass2cameldict(val) for key, val in arg.items()}
     return arg

@@ -26,7 +26,7 @@ def echo(bot: Bot, accid: int, event: NewMsgEvent) -> None:
     bot.rpc.send_msg(accid, msg.chat_id, MessageData(text=msg.text))
 
 
-if __name__ == "__main__":
+def main() -> None:
     with IOTransport() as trans:
         rpc = Rpc(trans)
         bot = Bot(rpc, hooks)
@@ -41,3 +41,7 @@ if __name__ == "__main__":
         link = rpc.get_chat_securejoin_qr_code(accid, None)
         print(f"Listening at: {link}")
         bot.run_forever()
+
+
+if __name__ == "__main__":
+    main()

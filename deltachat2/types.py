@@ -1,6 +1,7 @@
 """Data classes and types from the JSON-RPC."""
 
-# flake8: noqa
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from typing import Any, Literal, Optional, TypeAlias, TypeVar
@@ -11,7 +12,7 @@ from dacite import from_dict as __from_dict
 from ._utils import camel2snake_dict as _camel2snake_dict
 
 _config = _Config(cast=[StrEnum], type_hooks={})
-_T = TypeVar("T")
+_T = TypeVar("_T")
 
 
 def _from_dict(typ: type[_T], data: dict) -> _T:

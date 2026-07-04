@@ -79,17 +79,20 @@ class Client:
         The event is returned when the callable evaluates to True.
         """
         self.logger.debug("Listening to incoming events...")
-        if account_id:
-            if self.rpc.is_configured(account_id):
-                self.rpc.start_io(account_id)
-        else:
-            self.rpc.start_io_for_all_accounts()
+        self._start_io(account_id)
 
         while True:
             event = self.rpc.get_next_event()
             self._on_event(event, RawEvent)
             if func(event):
                 return event
+
+    def _start_io(self, account_id: int) -> None:
+        if account_id:
+            if self.rpc.is_configured(account_id):
+                self.rpc.start_io(account_id)
+        else:
+            self.rpc.start_io_for_all_accounts()
 
     def _on_event(self, event: Event, filter_type: type[EventFilter]) -> None:
         self._notify(self._hooks, event, filter_type)
@@ -99,6 +102,6 @@ class Client:
         for hook, evfilter in hooks.get(filter_type, []):
             if evfilter.filter(event.event):
                 try:
-                    hook(self, event.context_id, event.event)  # noqa
+                    hook(self, event.context_id, event.event)  # type: ignore[arg-type]
                 except Exception as ex:
                     self.logger.exception(ex)

@@ -33,7 +33,8 @@ dev = [
   "deltachat-rpc-server",
   "black",
   "isort",
-  "prospector[with-mypy]",
+  "mypy",
+  "pylint",
 ]
 
 [tool.setuptools_scm]
@@ -52,4 +53,30 @@ line-length = 100
 profile = "black"
 
 [tool.mypy]
-ignore_missing_imports = "True"
+ignore_missing_imports = true
+follow_imports = "silent"
+exclude = [
+  '^build$',
+  '/_utils\.py',
+  '/types\.py',
+]
+
+[tool.pylint.main]
+ignore-paths = [
+  "build",
+]
+ignore-patterns = [
+  "_version.py",
+  "_utils.py",
+  "transport.py",
+  "rpc.py",
+  "types.py",
+]
+[tool.pylint."messages control"]
+disable = [
+  "line-too-long",
+  "too-many-arguments",
+  "too-many-positional-arguments",
+  "too-many-function-args",
+  "broad-exception-caught",
+]

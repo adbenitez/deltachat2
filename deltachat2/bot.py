@@ -44,11 +44,7 @@ class Bot(Client):
         The callable will receive the Event object representing the last processed event.
         The event is returned when the callable evaluates to True.
         """
-        if account_id:
-            if self.rpc.is_configured(account_id):
-                self.rpc.start_io(account_id)
-        else:
-            self.rpc.start_io_for_all_accounts()
+        self._start_io(account_id)
 
         def _wrapper(event: Event) -> bool:
             if isinstance(event.event, EventTypeIncomingMsg):
@@ -92,6 +88,6 @@ class Bot(Client):
                 event = NewMsgEvent(command="", payload="", msg=msg)
                 if not msg.is_info and msg.text.startswith(self.command_prefix):
                     self._parse_command(accid, event)
-                self._on_event(Event(context_id=accid, event=event), NewMessage)  # noqa
+                self._on_event(Event(context_id=accid, event=event), NewMessage)  # type: ignore[arg-type]
         except JsonRpcError as err:
             self.logger.exception(err)

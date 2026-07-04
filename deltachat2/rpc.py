@@ -1,6 +1,5 @@
 """JSON-RPC API definition."""
 
-# flake8: noqa
 from typing import Any, Optional
 
 from ._utils import snakeclass2cameldict as _wrap
