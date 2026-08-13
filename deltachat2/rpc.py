@@ -67,6 +67,7 @@ from .types import (
     EventTypeMsgDelivered,
     EventTypeMsgFailed,
     EventTypeMsgRead,
+    EventTypeMsgReadCountChanged,
     EventTypeMsgsChanged,
     EventTypeMsgsNoticed,
     EventTypeNewBlobFile,
@@ -393,7 +394,7 @@ class Rpc:
         - [Rpc.add_transport_from_qr()] to add a transport
         from a server encoded in a QR code.
         - [Rpc.list_transports()] to get a list of all configured transports.
-        - [Rpc.delete_transport()] to remove a transport.
+        - [Rpc.set_transport_unpublished()] to remove a transport.
         - [Rpc.set_transport_unpublished()] to set whether contacts see this transport.
         """
         self.transport.call("add_or_update_transport", account_id, _wrap(param))
@@ -414,41 +415,56 @@ class Rpc:
         """
         Returns the list of all email accounts that are used as a transport in the current profile.
         Use [Rpc.add_or_update_transport()] to add or change a transport
-        and [Rpc.delete_transport()] to delete a transport.
-        Use [Rpc.list_transports_ex()] to additionally query
-        whether the transports are marked as 'unpublished'.
+        and [Rpc.set_transport_unpublished()] to remove a transport.
         """
         _result = self.transport.call("list_transports", account_id)
         return [_from_dict(EnteredLoginParam, _item) for _item in _result]
 
     def list_transports_ex(self, account_id: int) -> list[TransportListEntry]:
         """
+        Deprecated 2026-06: This is not needed by UI implementations anymore,
+        because unpublished relays now count as removed from the user point of view,
+        and must not be shown in the list of relays.
+        This means that UIs should use `list_transports()` instead of this function.
+
         Returns the list of all email accounts that are used as a transport in the current profile.
+
+        As opposed to `list_transports()`, this function also returns unpublished transports,
+        and for each returned transport it returns the information whether or not is `unpublished`.
+
         Use [Rpc.add_or_update_transport()] to add or change a transport
-        and [Rpc.delete_transport()] to delete a transport.
+        and [Rpc.set_transport_unpublished()] to change whether a transport is 'published'.
         """
         _result = self.transport.call("list_transports_ex", account_id)
         return [_from_dict(TransportListEntry, _item) for _item in _result]
 
     def delete_transport(self, account_id: int, addr: str) -> None:
         """
-        Removes the transport with the specified email address
-        (i.e. [EnteredLoginParam.addr]).
+        Immediately deletes a transport, potentially causing messages not to arrive.
+        This must ONLY be used by the automated tests.
+        UI implementations must use [`Rpc.set_transport_unpublished`] instead.
         """
         self.transport.call("delete_transport", account_id, addr)
 
     def set_transport_unpublished(self, account_id: int, addr: str, unpublished: bool) -> None:
         """
         Change whether the transport is unpublished.
+        UIs should call this function when the user clicks on "Remove".
+        Core will keep listening on this transport for some time,
+        and automatically remove it once it is no longer needed.
 
         Unpublished transports are not advertised to contacts,
         and self-sent messages are not sent there,
         so that we don't cause extra messages to the corresponding inbox,
         but can still receive messages from contacts who don't know our new transport addresses yet.
 
-        The default is false, but when the user updates from a version that didn't have this flag,
-        existing secondary transports are set to unpublished,
-        so that an existing transport address doesn't suddenly get spammed with a lot of messages.
+        When more transports are added by [`Rpc.add_or_update_transport()`] or [`Rpc.add_transport_from_qr`],
+        the least recently needed unpublished transport is automatically removed
+        if this is necessary in order to stay below the maximum number of allowed relays.
+        Also, unpublished transports that are not used to receive any new messages for a time defined by
+        [`UNPUBLISHED_TRANSPORT_KEEP_TIME`] are automatically removed.
+
+        [`UNPUBLISHED_TRANSPORT_KEEP_TIME`]: deltachat.sql.UNPUBLISHED_TRANSPORT_KEEP_TIME
         """
         self.transport.call("set_transport_unpublished", account_id, addr, unpublished)
 
@@ -790,7 +806,9 @@ class Rpc:
         Create a new unencrypted group chat.
 
         Same as [`Rpc.create_group_chat`], but the chat is unencrypted and can only have
-        address-contacts.
+        address-contacts. NB: Chats with similar names and the same members are merged on other
+        devices, but usually users don't create such chats and look up the existing one instead, so
+        chat split on the first device is acceptable.
         """
         return self.transport.call("create_group_chat_unencrypted", account_id, name)
 

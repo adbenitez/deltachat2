@@ -394,9 +394,6 @@ class EnteredLoginParam:
     # Imap username.
     imap_user: Optional[str] = None
 
-    # If true, login via OAUTH2 (not recommended anymore). Default: false
-    oauth2: Optional[bool] = None
-
     # Password.
     password: str
 
@@ -671,6 +668,17 @@ class EventTypeMsgFailed:
 @dataclass(kw_only=True)
 class EventTypeMsgRead:
     """A single message is read by the receiver. State changed from DC_STATE_OUT_DELIVERED to DC_STATE_OUT_MDN_RCVD, see `Message.state`."""
+
+    # ID of the chat which the message belongs to.
+    chat_id: int
+
+    # ID of the message that was read.
+    msg_id: int
+
+
+@dataclass(kw_only=True)
+class EventTypeMsgReadCountChanged:
+    """Like [`EventType.MsgRead`], but also fires on subsequent MDNs, if there are multiple receivers, i.e. in groups and channels."""
 
     # ID of the chat which the message belongs to.
     chat_id: int
@@ -982,6 +990,7 @@ EventType: TypeAlias = (
     | EventTypeMsgDelivered
     | EventTypeMsgFailed
     | EventTypeMsgRead
+    | EventTypeMsgReadCountChanged
     | EventTypeMsgDeleted
     | EventTypeChatModified
     | EventTypeChatEphemeralTimerModified
@@ -1061,6 +1070,8 @@ def _unmarshalEventType(data: dict) -> EventType:
             return _from_dict(EventTypeMsgFailed, data)
         case "MsgRead":
             return _from_dict(EventTypeMsgRead, data)
+        case "MsgReadCountChanged":
+            return _from_dict(EventTypeMsgReadCountChanged, data)
         case "MsgDeleted":
             return _from_dict(EventTypeMsgDeleted, data)
         case "ChatModified":
