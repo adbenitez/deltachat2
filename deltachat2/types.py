@@ -61,7 +61,6 @@ class MessageState(IntEnum):
 
 @dataclass(kw_only=True)
 class AccountConfigured:
-    addr: Optional[str] = None
     color: str
     display_name: Optional[str] = None
     id: int
@@ -94,9 +93,23 @@ _config.type_hooks[Account] = _unmarshalAccount
 
 
 @dataclass(kw_only=True)
+class AppSource:
+    """Version information of a single source of a client, eg. "gplay" or "fdroid"."""
+
+    # Where to download that version. Security note: consumers need to verify themselves that downloaded app files are valid before installing them.
+    download_url: str
+
+    # Always increasing version number.
+    version_integer: int
+
+    # Version string that should be shown to the user. UI must not linkify the string as it may be interpreted like a phone number or an IP address.
+    version_string: str
+
+
+@dataclass(kw_only=True)
 class BasicChat:
     """
-    cheaper version of fullchat, omits: - contact_ids - fresh_message_counter - ephemeral_timer - self_in_group - was_seen_recently - can_send
+    cheaper version of fullchat, omits: - contact_ids - fresh_message_counter - ephemeral_timer - self_in_group - freshness - can_send
 
     used when you only need the basic metadata of a chat like type, name, profile picture
     """
@@ -208,6 +221,7 @@ class ChatListItemFetchResultChatListItem:
     # contact id if this is a dm chat (for view profile entry in context menu)
     dm_chat_contact: Optional[int] = None
     fresh_message_counter: int
+    freshness: ContactFreshness
     id: int
     is_archived: bool
     is_contact_request: bool
@@ -235,13 +249,9 @@ class ChatListItemFetchResultChatListItem:
     last_message_type: Optional[Viewtype] = None
     last_updated: Optional[int] = None
     name: str
-
-    # showing preview if last chat message is image
-    summary_preview_image: Optional[str] = None
     summary_status: int
     summary_text1: str
     summary_text2: str
-    was_seen_recently: bool
 
 
 @dataclass(kw_only=True)
@@ -305,6 +315,7 @@ class Contact:
     #
     # This can only be true for key-contacts. However, it is possible to have a key-contact for which encryption is not available because we don't have a key yet, e.g. if we just scanned the fingerprint from a QR code.
     e2ee_avail: bool
+    freshness: ContactFreshness
     id: int
     is_blocked: bool
 
@@ -314,33 +325,22 @@ class Contact:
     # Is the contact a key contact.
     is_key_contact: bool
 
-    # True if the contact can be added to protected chats because SELF and contact have verified their fingerprints in both directions.
-    #
-    # See [`Rpc.verifier_id`]/`Contact.verifierId` for a guidance how to display these information.
-    is_verified: bool
-
     # the contact's last seen timestamp
     last_seen: int
     name: str
-    name_and_addr: str
     profile_image: Optional[str] = None
     status: str
 
-    # The contact ID that verified a contact.
-    #
-    # As verifier may be unknown, use [`Rpc.is_verified`]/`Contact.isVerified` to check if a contact can be added to a protected chat.
-    #
-    # UI should display the information in the contact's profile as follows:
-    #
-    # - If `verifierId` != 0, display text "Introduced by ..." with the name of the contact. Prefix the text by a green checkmark.
-    #
-    # - If `verifierId` == 0 and `isVerified` != 0, display "Introduced" prefixed by a green checkmark.
-    #
-    # - if `verifierId` == 0 and `isVerified` == 0, display nothing
-    #
-    # This contains the contact ID of the verifier. If it is `DC_CONTACT_ID_SELF`, we verified the contact ourself. If it is None/Null, we don't have verifier information or the contact is not verified.
-    verifier_id: Optional[int] = None
-    was_seen_recently: bool
+
+class ContactFreshness(StrEnum):
+    # Contact shall not be highlighted.
+    NORMAL = "Normal"
+
+    # Contact was seen recently.
+    RECENTLY_SEEN = "RecentlySeen"
+
+    # Contact was not seen for a long time.
+    OLD = "Old"
 
 
 class DownloadState(StrEnum):
@@ -353,7 +353,7 @@ class DownloadState(StrEnum):
 
 
 class EnteredCertificateChecks(StrEnum):
-    # `Automatic` means that provider database setting should be taken. If there is no provider database setting for certificate checks, check certificates strictly.
+    # `Automatic` means strict certificate checks, unless a legacy-domain override disables them.
     AUTOMATIC = "automatic"
 
     # Ensure that TLS certificate is valid for the server hostname.
@@ -491,13 +491,6 @@ class EventTypeSmtpMessageSent:
 @dataclass(kw_only=True)
 class EventTypeImapMessageDeleted:
     """Emitted when an IMAP message has been marked as deleted"""
-
-    msg: str
-
-
-@dataclass(kw_only=True)
-class EventTypeImapMessageMoved:
-    """Emitted when an IMAP message has been moved"""
 
     msg: str
 
@@ -737,6 +730,18 @@ class EventTypeChatDeleted:
 
 
 @dataclass(kw_only=True)
+class EventTypePinnedMessagesChanged:
+    """
+    The list of pinned messages for the chat has changed.
+
+    Some message got pinned, or pinned message is unpinned or deleted.
+    """
+
+    # ID of the chat where the list of pinned messages changed.
+    chat_id: int
+
+
+@dataclass(kw_only=True)
 class EventTypeContactsChanged:
     """Contact(s) created, renamed, blocked or deleted."""
 
@@ -814,7 +819,7 @@ class EventTypeSecurejoinJoinerProgress:
     # ID of the inviting contact.
     contact_id: int
 
-    # Progress as: 400=vg-/vc-request-with-auth sent, typically shown as "alice@addr verified, introducing myself." (Bob has verified alice and waits until Alice does the same for him) 1000=vg-member-added/vc-contact-confirm received
+    # Progress as: 400=vg-/vc-request-with-auth sent, typically shown as "introducing myself." 1000=vg-member-added/vc-contact-confirm received
     progress: int
 
 
@@ -869,9 +874,11 @@ class EventTypeWebxdcInstanceDeleted:
     msg_id: int
 
 
-# Tells that the Background fetch was completed (or timed out). This event acts as a marker, when you reach this event you can be sure that all events emitted during the background fetch were processed.
+# Tells that a background fetch call is done: the fetch completed, timed out, was stopped or was not started.
 #
-# This event is only emitted by the account manager
+# For the call that started the fetch, this event acts as a marker: all events emitted during the fetch were processed once it is reached. A call made while another background fetch is running gets the event immediately, and the running fetch keeps emitting events until its own marker.
+#
+# This event is only emitted by the account manager.
 EventTypeAccountsBackgroundFetchDone = Literal["AccountsBackgroundFetchDone"]
 # Inform that set of chats or the order of the chats in the chatlist has changed.
 #
@@ -965,7 +972,7 @@ class EventTypeCallEnded:
 #
 # UI should update the list.
 #
-# This event is emitted when transport synchronization messages arrives, but not when the UI modifies the transport list by itself.
+# The event is emitted on the device modifying the transports as well as on other devices applying the synced change.
 EventTypeTransportsModified = Literal["TransportsModified"]
 EventType: TypeAlias = (
     EventTypeInfo
@@ -973,7 +980,6 @@ EventType: TypeAlias = (
     | EventTypeImapConnected
     | EventTypeSmtpMessageSent
     | EventTypeImapMessageDeleted
-    | EventTypeImapMessageMoved
     | EventTypeImapInboxIdle
     | EventTypeNewBlobFile
     | EventTypeDeletedBlobFile
@@ -995,6 +1001,7 @@ EventType: TypeAlias = (
     | EventTypeChatModified
     | EventTypeChatEphemeralTimerModified
     | EventTypeChatDeleted
+    | EventTypePinnedMessagesChanged
     | EventTypeContactsChanged
     | EventTypeLocationChanged
     | EventTypeConfigureProgress
@@ -1036,8 +1043,6 @@ def _unmarshalEventType(data: dict) -> EventType:
             return _from_dict(EventTypeSmtpMessageSent, data)
         case "ImapMessageDeleted":
             return _from_dict(EventTypeImapMessageDeleted, data)
-        case "ImapMessageMoved":
-            return _from_dict(EventTypeImapMessageMoved, data)
         case "ImapInboxIdle":
             return kind
         case "NewBlobFile":
@@ -1080,6 +1085,8 @@ def _unmarshalEventType(data: dict) -> EventType:
             return _from_dict(EventTypeChatEphemeralTimerModified, data)
         case "ChatDeleted":
             return _from_dict(EventTypeChatDeleted, data)
+        case "PinnedMessagesChanged":
+            return _from_dict(EventTypePinnedMessagesChanged, data)
         case "ContactsChanged":
             return _from_dict(EventTypeContactsChanged, data)
         case "LocationChanged":
@@ -1146,6 +1153,7 @@ class FullChat:
     contact_ids: list[int]
     ephemeral_timer: int
     fresh_message_counter: int
+    freshness: ContactFreshness
     id: int
     is_contact_request: bool
     is_device_chat: bool
@@ -1173,7 +1181,6 @@ class FullChat:
 
     # Note that this is different from [`ChatListItem.is_self_in_group`](`crate.api.types.chat_list.ChatListItemFetchResult.ChatListItem.is_self_in_group`). This property should only be accessed when [`FullChat.chat_type`] is [`Chattype.Group`].
     self_in_group: bool
-    was_seen_recently: bool
 
 
 @dataclass(kw_only=True)
@@ -1235,10 +1242,13 @@ class Message:
     is_edited: bool
     is_forwarded: bool
     is_info: bool
+    is_pinned: bool
     original_msg_id: Optional[int] = None
     override_sender_name: Optional[str] = None
     parent_id: Optional[int] = None
     quote: Optional[MessageQuote] = None
+
+    # `None` when there are no reactions.
     reactions: Optional[Reactions] = None
     received_timestamp: int
     saved_message_id: Optional[int] = None
@@ -1350,10 +1360,13 @@ class MessageLoadResultMessage:
     is_edited: bool
     is_forwarded: bool
     is_info: bool
+    is_pinned: bool
     original_msg_id: Optional[int] = None
     override_sender_name: Optional[str] = None
     parent_id: Optional[int] = None
     quote: Optional[MessageQuote] = None
+
+    # `None` when there are no reactions.
     reactions: Optional[Reactions] = None
     received_timestamp: int
     saved_message_id: Optional[int] = None
@@ -1506,31 +1519,10 @@ def _unmarshalMuteDuration(data: dict) -> MuteDuration:
 _config.type_hooks[MuteDuration] = _unmarshalMuteDuration
 
 
-class NotifyState(StrEnum):
-    # Not subscribed to push notifications.
-    NOT_CONNECTED = "NotConnected"
-
-    # Subscribed to heartbeat push notifications.
-    HEARTBEAT = "Heartbeat"
-
-    # Subscribed to push notifications for new messages.
-    CONNECTED = "Connected"
-
-
-@dataclass(kw_only=True)
-class ProviderInfo:
-    before_login_hint: str
-
-    # Unique ID, corresponding to provider database filename.
-    id: str
-    overview_page: str
-    status: int
-
-
 @dataclass(kw_only=True)
 class QrAskVerifyContact:
     """
-    Ask the user whether to verify the contact.
+    Ask the user whether to start chatting with the contact.
 
     If the user agrees, pass this QR code to [`crate.securejoin.join_securejoin`].
     """
@@ -1606,29 +1598,13 @@ class QrAskJoinBroadcast:
 @dataclass(kw_only=True)
 class QrFprOk:
     """
-    Contact fingerprint is verified.
+    Contact fingerprint matches.
 
     Ask the user if they want to start chatting.
     """
 
     # Contact ID.
     contact_id: int
-
-
-@dataclass(kw_only=True)
-class QrFprMismatch:
-    """Scanned fingerprint does not match the last seen fingerprint."""
-
-    # Contact ID.
-    contact_id: Optional[int] = None
-
-
-@dataclass(kw_only=True)
-class QrFprWithoutAddr:
-    """The scanned QR code contains a fingerprint but no e-mail address."""
-
-    # Key fingerprint.
-    fingerprint: str
 
 
 @dataclass(kw_only=True)
@@ -1860,8 +1836,6 @@ Qr: TypeAlias = (
     | QrAskVerifyGroup
     | QrAskJoinBroadcast
     | QrFprOk
-    | QrFprMismatch
-    | QrFprWithoutAddr
     | QrAccount
     | QrBackup2
     | QrBackupTooNew
@@ -1891,10 +1865,6 @@ def _unmarshalQr(data: dict) -> Qr:
             return _from_dict(QrAskJoinBroadcast, data)
         case "fprOk":
             return _from_dict(QrFprOk, data)
-        case "fprMismatch":
-            return _from_dict(QrFprMismatch, data)
-        case "fprWithoutAddr":
-            return _from_dict(QrFprWithoutAddr, data)
         case "account":
             return _from_dict(QrAccount, data)
         case "backup2":
@@ -1953,7 +1923,11 @@ class Reactions:
     # Unique reactions and their count, sorted in descending order.
     reactions: list[Reaction]
 
-    # Map from a contact to it's reaction to message. There is only a single reaction per contact, but this contains a list of reactions for historical reasons.
+    # Map from a contact to it's reaction to message.
+    #
+    # There is only a single reaction per contact, but this contains a list of reactions for historical reasons.
+    #
+    # For channels subscribers, this map is empty or contains `ContactId.SELF` only.
     reactions_by_contact: dict[Any, list[str]]
 
 
@@ -2021,11 +1995,13 @@ class SystemMessageType(StrEnum):
     WEBXDC_STATUS_UPDATE = "WebxdcStatusUpdate"
     CALL_ACCEPTED = "CallAccepted"
     CALL_ENDED = "CallEnded"
+    MESSAGE_PINNED = "MessagePinned"
+    MESSAGE_UNPINNED = "MessageUnpinned"
 
-    # 1:1 chats info message telling that SecureJoin has started and the user should wait for it to complete.
+    # Single chats info message telling that SecureJoin has started and the user should wait for it to complete.
     SECUREJOIN_WAIT = "SecurejoinWait"
 
-    # 1:1 chats info message telling that SecureJoin is still running, but the user may already send messages.
+    # Single chats info message telling that SecureJoin is still running, but the user may already send messages.
     SECUREJOIN_WAIT_TIMEOUT = "SecurejoinWaitTimeout"
 
     # Chat ephemeral message timer is changed.
@@ -2039,16 +2015,6 @@ class SystemMessageType(StrEnum):
 
     # This message contains a users iroh node address.
     IROH_NODE_ADDR = "IrohNodeAddr"
-
-
-@dataclass(kw_only=True)
-class TransportListEntry:
-
-    # Whether this transport is set to 'unpublished'. See `set_transport_unpublished` / `setTransportUnpublished` for details.
-    is_unpublished: bool
-
-    # The login data entered by the user.
-    param: EnteredLoginParam
 
 
 @dataclass(kw_only=True)

@@ -27,7 +27,7 @@ Homepage = "https://github.com/adbenitez/deltachat2"
 
 [project.optional-dependencies]
 full = [
-    "deltachat-rpc-server==2.58.0",
+    "deltachat-rpc-server==2.68.0",
 ]
 dev = [
   "deltachat-rpc-server",

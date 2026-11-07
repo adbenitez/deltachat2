@@ -8,6 +8,7 @@ from .types import (
     Account,
     AccountConfigured,
     AccountUnconfigured,
+    AppSource,
     BasicChat,
     CallInfo,
     CallState,
@@ -24,6 +25,7 @@ from .types import (
     ChatType,
     ChatVisibility,
     Contact,
+    ContactFreshness,
     DownloadState,
     EnteredCertificateChecks,
     EnteredLoginParam,
@@ -52,7 +54,6 @@ from .types import (
     EventTypeImapConnected,
     EventTypeImapInboxIdle,
     EventTypeImapMessageDeleted,
-    EventTypeImapMessageMoved,
     EventTypeImexFileWritten,
     EventTypeImexProgress,
     EventTypeIncomingCall,
@@ -72,6 +73,7 @@ from .types import (
     EventTypeMsgsNoticed,
     EventTypeNewBlobFile,
     EventTypeOutgoingCallAccepted,
+    EventTypePinnedMessagesChanged,
     EventTypeReactionsChanged,
     EventTypeSecurejoinInviterProgress,
     EventTypeSecurejoinJoinerProgress,
@@ -106,8 +108,6 @@ from .types import (
     MuteDurationForever,
     MuteDurationNotMuted,
     MuteDurationUntil,
-    NotifyState,
-    ProviderInfo,
     Qr,
     QrAccount,
     QrAddr,
@@ -116,9 +116,7 @@ from .types import (
     QrAskVerifyGroup,
     QrBackup2,
     QrBackupTooNew,
-    QrFprMismatch,
     QrFprOk,
-    QrFprWithoutAddr,
     QrLogin,
     QrProxy,
     QrReviveJoinBroadcast,
@@ -136,7 +134,6 @@ from .types import (
     SecurejoinUiPath,
     Socket,
     SystemMessageType,
-    TransportListEntry,
     VcardContact,
     Viewtype,
     WebxdcMessageInfo,
@@ -242,13 +239,37 @@ class Rpc:
         """
         Performs a background fetch for all accounts in parallel with a timeout.
 
-        The `AccountsBackgroundFetchDone` event is emitted at the end even in case of timeout.
+        For an account with IO stopped, the scheduler is paused
+        and every transport is fetched concurrently on a dedicated connection.
+        The account is done as soon as one transport received messages, the others stop.
+        Only one batch of messages is fetched per transport this way,
+        so a larger backlog is left to the next call or to started IO.
+
+        For an account with IO running, IMAP IDLE is interrupted on every transport
+        and the account is done once every transport is.
+
+        The call never waits for outgoing messages and never triggers sending them itself.
+        Received messages may still queue replies, securejoin handshakes for example,
+        which go out only while IO is running.
+        Use `is_sending_finished()` to tell whether the outgoing queue is empty.
+
+        The `AccountsBackgroundFetchDone` event is emitted at the end even in case of timeout,
+        and immediately if another background fetch is already running.
         Process all events until you get this one and you can safely return to the background
-        without forgetting to create notifications caused by timing race conditions.
+        without forgetting to create a generic notification if no message was fetched.
+        The event carries no data identifying the call it belongs to,
+        so it marks your own call only if no concurrent background fetch is happening.
         """
         self.transport.call("background_fetch", timeout_in_seconds)
 
     def stop_background_fetch(self) -> None:
+        """
+        Stops an ongoing `background_fetch()` call, making it return early
+        without waiting for the remaining transports or for the timeout.
+
+        The `AccountsBackgroundFetchDone` event is emitted as usual.
+        Does nothing if no background fetch is running.
+        """
         self.transport.call("stop_background_fetch")
 
     def start_io(self, account_id: int) -> None:
@@ -264,25 +285,9 @@ class Rpc:
         _result = self.transport.call("get_account_info", account_id)
         return _unmarshalAccount(_result)
 
-    def get_push_state(self, account_id: int) -> NotifyState:
-        """Get the current push notification state."""
-        return self.transport.call("get_push_state", account_id)
-
     def get_account_file_size(self, account_id: int) -> int:
         """Get the combined filesize of an account in bytes"""
         return self.transport.call("get_account_file_size", account_id)
-
-    def get_provider_info(self, account_id: int, email: str) -> Optional[ProviderInfo]:
-        """
-        Returns provider for the given domain.
-
-        This function looks up domain in offline database.
-
-        For compatibility, email address can be passed to this function
-        instead of the domain.
-        """
-        _result = self.transport.call("get_provider_info", account_id, email)
-        return _result and _from_dict(ProviderInfo, _result)
 
     def is_configured(self, account_id: int) -> bool:
         """Checks if the context is already configured."""
@@ -364,6 +369,14 @@ class Rpc:
         """
         self.transport.call("configure", account_id)
 
+    def add_pseudo_transport(self, account_id: int, addr: str) -> None:
+        """
+        Adds fake transport that cannot be used to connect.
+
+        Used for offline tests only.
+        """
+        self.transport.call("add_pseudo_transport", account_id, addr)
+
     def add_or_update_transport(self, account_id: int, param: EnteredLoginParam) -> None:
         """
         Configures a new email account using the provided parameters
@@ -394,8 +407,7 @@ class Rpc:
         - [Rpc.add_transport_from_qr()] to add a transport
         from a server encoded in a QR code.
         - [Rpc.list_transports()] to get a list of all configured transports.
-        - [Rpc.set_transport_unpublished()] to remove a transport.
-        - [Rpc.set_transport_unpublished()] to set whether contacts see this transport.
+        - [Rpc.delete_transport()] to remove a transport.
         """
         self.transport.call("add_or_update_transport", account_id, _wrap(param))
 
@@ -411,62 +423,37 @@ class Rpc:
         """
         self.transport.call("add_transport_from_qr", account_id, qr)
 
+    def init_transports(self, account_id: int, qr: Optional[str]) -> None:
+        """
+        Adds an initial transport on the chatmail relay that answers fastest
+        and lets the profile add further ones in the background.
+
+        A `DCACCOUNT:` or `DCLOGIN:` `qr` code adds a single transport
+        while securejoin codes add the inviter's relays to the candidates.
+
+        Does nothing if the profile already has a transport.
+        """
+        self.transport.call("init_transports", account_id, qr)
+
     def list_transports(self, account_id: int) -> list[EnteredLoginParam]:
         """
         Returns the list of all email accounts that are used as a transport in the current profile.
         Use [Rpc.add_or_update_transport()] to add or change a transport
-        and [Rpc.set_transport_unpublished()] to remove a transport.
+        and [Rpc.delete_transport()] to remove a transport.
         """
         _result = self.transport.call("list_transports", account_id)
         return [_from_dict(EnteredLoginParam, _item) for _item in _result]
 
-    def list_transports_ex(self, account_id: int) -> list[TransportListEntry]:
-        """
-        Deprecated 2026-06: This is not needed by UI implementations anymore,
-        because unpublished relays now count as removed from the user point of view,
-        and must not be shown in the list of relays.
-        This means that UIs should use `list_transports()` instead of this function.
-
-        Returns the list of all email accounts that are used as a transport in the current profile.
-
-        As opposed to `list_transports()`, this function also returns unpublished transports,
-        and for each returned transport it returns the information whether or not is `unpublished`.
-
-        Use [Rpc.add_or_update_transport()] to add or change a transport
-        and [Rpc.set_transport_unpublished()] to change whether a transport is 'published'.
-        """
-        _result = self.transport.call("list_transports_ex", account_id)
-        return [_from_dict(TransportListEntry, _item) for _item in _result]
-
     def delete_transport(self, account_id: int, addr: str) -> None:
         """
-        Immediately deletes a transport, potentially causing messages not to arrive.
-        This must ONLY be used by the automated tests.
-        UI implementations must use [`Rpc.set_transport_unpublished`] instead.
+        Removes a transport.
+        UIs should call this function when the user removes a relay.
+
+        The last transport cannot be removed.
+        If the removed transport was the one used for sending,
+        another one is chosen automatically.
         """
         self.transport.call("delete_transport", account_id, addr)
-
-    def set_transport_unpublished(self, account_id: int, addr: str, unpublished: bool) -> None:
-        """
-        Change whether the transport is unpublished.
-        UIs should call this function when the user clicks on "Remove".
-        Core will keep listening on this transport for some time,
-        and automatically remove it once it is no longer needed.
-
-        Unpublished transports are not advertised to contacts,
-        and self-sent messages are not sent there,
-        so that we don't cause extra messages to the corresponding inbox,
-        but can still receive messages from contacts who don't know our new transport addresses yet.
-
-        When more transports are added by [`Rpc.add_or_update_transport()`] or [`Rpc.add_transport_from_qr`],
-        the least recently needed unpublished transport is automatically removed
-        if this is necessary in order to stay below the maximum number of allowed relays.
-        Also, unpublished transports that are not used to receive any new messages for a time defined by
-        [`UNPUBLISHED_TRANSPORT_KEEP_TIME`] are automatically removed.
-
-        [`UNPUBLISHED_TRANSPORT_KEEP_TIME`]: deltachat.sql.UNPUBLISHED_TRANSPORT_KEEP_TIME
-        """
-        self.transport.call("set_transport_unpublished", account_id, addr, unpublished)
 
     def stop_ongoing_process(self, account_id: int) -> None:
         """Signal an ongoing process to stop."""
@@ -624,7 +611,7 @@ class Rpc:
         - The chat or the contact is **not blocked**, so new messages from the user/the group may appear as a contact request
         and the user may create the chat again.
         - **Groups are not left** - this would
-        be unexpected as (1) deleting a normal chat also does not prevent new mails
+        be unexpected as (1) deleting a single chat also does not prevent new mails
         from arriving, (2) leaving a group requires sending a message to
         all group members - especially for groups not used for a longer time, this is
         really unexpected when deletion results in contacting all members again,
@@ -648,6 +635,8 @@ class Rpc:
         """
         Get QR code text that will offer a [SecureJoin](https://securejoin.delta.chat/) invitation.
 
+        To reset invitations, pass the link to `set_config_from_qr()`.
+
         If `chat_id` is a group chat ID, SecureJoin QR code for the group is returned.
         If `chat_id` is unset, setup contact QR code is returned.
         """
@@ -657,20 +646,19 @@ class Rpc:
         self, account_id: int, chat_id: Optional[int]
     ) -> tuple[str, str]:
         """
-        Get QR code (text and SVG) that will offer a Setup-Contact or Verified-Group invitation.
+        Get QR code (text and SVG) that will offer a SecureJoin invitation.
         The QR code is compatible to the OPENPGP4FPR format
         so that a basic fingerprint comparison also works e.g. with OpenKeychain.
 
         The scanning device will pass the scanned content to `checkQr()` then;
         if `checkQr()` returns `askVerifyContact` or `askVerifyGroup`
-        an out-of-band-verification can be joined using `secure_join()`
+        the securejoin protocol can be started using `secure_join()`
 
         @deprecated as of 2026-03; use create_qr_svg(get_chat_securejoin_qr_code()) instead.
 
         chat_id: If set to a group-chat-id,
-        the Verified-Group-Invite protocol is offered in the QR code;
-        works for protected groups as well as for normal groups.
-        If not set, the Setup-Contact protocol is offered in the QR code.
+        the SecureJoin QR code for the group is returned.
+        If not set, the setup contact QR code is returned.
         See https://securejoin.delta.chat/ for details about both protocols.
 
         return format: `[code, svg]`
@@ -679,7 +667,7 @@ class Rpc:
 
     def secure_join(self, account_id: int, qr: str) -> int:
         """
-        Continue a Setup-Contact or Verified-Group-Invite protocol
+        Continue the SecureJoin protocol
         started on another device with `get_chat_securejoin_qr_code_svg()`.
         This function is typically called when `check_qr()` returns
         type=AskVerifyContact or type=AskVerifyGroup.
@@ -689,15 +677,12 @@ class Rpc:
         During the handshake, info messages are added to the chat,
         showing progress, success or errors.
 
-        Subsequent calls of `secure_join()` will abort previous, unfinished handshakes.
-
         See https://securejoin.delta.chat/ for details about both protocols.
 
         **qr**: The text of the scanned QR code. Typically, the same string as given
         to `check_qr()`.
 
         **returns**: The chat ID of the joined chat, the UI may redirect to the this chat.
-        A returned chat ID does not guarantee that the chat is protected or the belonging contact is verified.
 
         """
         return self.transport.call("secure_join", account_id, qr)
@@ -748,8 +733,6 @@ class Rpc:
         If the group is already _promoted_ (any message was sent to the group),
         all group members are informed by a special status message that is sent automatically by this function.
 
-        If the group has group protection enabled, only verified contacts can be added to the group.
-
         Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
         """
         self.transport.call("add_contact_to_chat", account_id, chat_id, contact_id)
@@ -758,7 +741,7 @@ class Rpc:
         """
         Get the contact IDs belonging to a chat.
 
-        - for normal chats, the function always returns exactly one contact,
+        - for single chats, the function always returns exactly one contact,
         DC_CONTACT_ID_SELF is returned only for SELF-chats.
 
         - for group chats all members are returned, DC_CONTACT_ID_SELF is returned
@@ -997,7 +980,7 @@ class Rpc:
         The concrete action depends on the type of the chat and on the users settings
         (dc_msgs_presented() may be a better name therefore, but well. :)
 
-        - For normal chats, the IMAP state is updated, MDN is sent
+        - For single chats, the IMAP state is updated, MDN is sent
         (if set_config()-options `mdns_enabled` is set)
         and the internal state is changed to @ref DC_STATE_IN_SEEN to reflect these actions.
 
@@ -1037,7 +1020,7 @@ class Rpc:
 
         * chat_id The chat ID of which the messages IDs should be queried.
         * _info_only: Deprecated, pass `false` here.
-        * `add_daymarker` - If `true`, add day markers as `DC_MSG_ID_DAYMARKER` to the result,
+        * `add_daymarker` - If `true`, add day markers as `MsgId.DAYMARKER` to the result,
         e.g. [1234, 1237, 9, 1239]. The day marker timestamp is the midnight one for the
         corresponding (following) day in the local timezone.
         """
@@ -1074,6 +1057,40 @@ class Rpc:
     def get_message_html(self, account_id: int, message_id: int) -> Optional[str]:
         return self.transport.call("get_message_html", account_id, message_id)
 
+    def get_message_summary_text(
+        self,
+        account_id: int,
+        message_id: int,
+        add_forwarded: bool,
+        add_type_emoji: bool,
+        approx_chars: int,
+    ) -> str:
+        """
+        Returns a message summary.
+        Used for notifications, pinned messages and for copying texts to clipboard.
+
+        - `add_forwarded`: `true`=add a hint if a message was forwarded.
+        `false`=do not add the hint;
+        this is allowed only if the message is shown without a username, e.g. for pinned messages.
+        - `add_type_emoji`: `true`=add the type of the message as an emoji prefix.
+        `false`=do not add type emoji;
+        this is allowed only if the message type is visible otherwise,
+        close to where the emoji would be displayed otherwise
+        (eg. images in pinned messages preceding summary)
+        - `approx_chars`: `>0`=convert linebreaks to spaces and truncate the line at about the given number of characters;
+        for single-line UI elements such as pinned messages or notifications;
+        additionally, UIs will most times clip the text to the available space.
+        `0`=leave linebreaks as is and return the full text, useful e.g. for copying to clipboard.
+        """
+        return self.transport.call(
+            "get_message_summary_text",
+            account_id,
+            message_id,
+            add_forwarded,
+            add_type_emoji,
+            approx_chars,
+        )
+
     def get_messages(self, account_id: int, message_ids: list[int]) -> dict[Any, MessageLoadResult]:
         """
         get multiple messages in one call,
@@ -1090,6 +1107,16 @@ class Rpc:
         """Fetch info desktop needs for creating a notification for a message"""
         _result = self.transport.call("get_message_notification_info", account_id, message_id)
         return _from_dict(MessageNotificationInfo, _result)
+
+    def set_pinned_message_state(
+        self, account_id: int, message_id: int, pinned_state: bool
+    ) -> None:
+        """Sets the "pinned" state for a message."""
+        self.transport.call("set_pinned_message_state", account_id, message_id, pinned_state)
+
+    def get_pinned_messages(self, account_id: int, chat_id: int) -> list[int]:
+        """Returns all pinned messages of a chat."""
+        return self.transport.call("get_pinned_messages", account_id, chat_id)
 
     def delete_messages(self, account_id: int, message_ids: list[int]) -> None:
         """
@@ -1249,7 +1276,7 @@ class Rpc:
         """
         Get encryption info for a contact.
         Get a multi-line encryption info, containing your fingerprint and the
-        fingerprint of the contact, used e.g. to compare the fingerprints for a simple out-of-band verification.
+        fingerprint of the contact, used e.g. to compare the fingerprints out-of-band.
         """
         return self.transport.call("get_contact_encryption_info", account_id, contact_id)
 
@@ -1300,7 +1327,7 @@ class Rpc:
 
     def get_chat_id_by_contact_id(self, account_id: int, contact_id: int) -> Optional[int]:
         """
-        Returns the [`ChatId`] for the 1:1 chat with `contact_id` if it exists.
+        Returns the [`ChatId`] for the single chat with `contact_id` if it exists.
 
         If it does not exist, `None` is returned.
         """
@@ -1404,17 +1431,21 @@ class Rpc:
         """
         self.transport.call("maybe_network")
 
+    def wait_for_all_work_done(self, account_id: int) -> None:
+        """
+        Waits until all transports are idle or failed and no background work is left.
+        Never returns unless I/O is started. Must ONLY be used by tests.
+        """
+        self.transport.call("wait_for_all_work_done", account_id)
+
     def get_connectivity(self, account_id: int) -> int:
         """
         Get the current connectivity, i.e. whether the device is connected to the IMAP server.
         One of:
-        - DC_CONNECTIVITY_NOT_CONNECTED (1000-1999): Show e.g. the string "Not connected" or a red dot
-        - DC_CONNECTIVITY_CONNECTING (2000-2999): Show e.g. the string "Connecting…" or a yellow dot
-        - DC_CONNECTIVITY_WORKING (3000-3999): Show e.g. the string "Getting new messages" or a spinning wheel
-        - DC_CONNECTIVITY_CONNECTED (>=4000): Show e.g. the string "Connected" or a green dot
-
-        We don't use exact values but ranges here so that we can split up
-        states into multiple states in the future.
+        - DC_CONNECTIVITY_NOT_CONNECTED (1000): Show e.g. the string "Not connected" or a red dot
+        - DC_CONNECTIVITY_CONNECTING (2000): Show e.g. the string "Connecting…" or a yellow dot
+        - DC_CONNECTIVITY_WORKING (3000): Show e.g. the string "Getting new messages" or a spinning wheel
+        - DC_CONNECTIVITY_CONNECTED (4000): Show e.g. the string "Connected" or a green dot
 
         Meant as a rough overview that can be shown
         e.g. in the title of the main screen.
@@ -1531,6 +1562,9 @@ class Rpc:
         Get blob encoded as base64 from a webxdc message
 
         path is the path of the file within webxdc archive
+
+        If the file is `icon.png` or `icon.jpg`,
+        loading it may fail if dimensions are unexpectedly large.
         """
         return self.transport.call("get_webxdc_blob", account_id, instance_msg_id, path)
 
@@ -1639,7 +1673,10 @@ class Rpc:
         return self.transport.call("send_reaction", account_id, message_id, reaction)
 
     def get_message_reactions(self, account_id: int, message_id: int) -> Optional[Reactions]:
-        """Returns reactions to the message."""
+        """
+        Returns reactions to the message.
+        `None` when there are no reactions.
+        """
         _result = self.transport.call("get_message_reactions", account_id, message_id)
         return _result and _from_dict(Reactions, _result)
 
@@ -1757,3 +1794,39 @@ class Rpc:
 
     def misc_send_draft(self, account_id: int, chat_id: int) -> int:
         return self.transport.call("misc_send_draft", account_id, chat_id)
+
+    def get_app_version(self, client_id: str, source_id: str) -> Optional[AppSource]:
+        """
+        Get version information of a specific client and source
+        across all configured accounts and transports.
+
+        Returns the source with the highest `version_integer`.
+        If no matching version information is available at all, `None` is returned.
+
+        UIs shall call the function after a reasonable time after app start,
+        when most relays have reported the information they have, say 30 seconds.
+        After that, once a day.
+        (it is accepted if by the simple approach an update message is delayed.
+        an event was considered, but that seemed more complex for few benefit:
+        as we do not know if "late" relays will report "better" versions,
+        also there we would work with timeouts etc.)
+
+        If the reported `version_integer` is larger than the running app version,
+        the UI shall report to the user, that an update is available,
+        and, if possible, offer a direct update by the given URL.
+
+        Security note: consumers need to verify themselves
+        that downloaded app files are valid before installing them.
+        """
+        _result = self.transport.call("get_app_version", client_id, source_id)
+        return _result and _from_dict(AppSource, _result)
+
+    def is_sending_finished(self) -> bool:
+        """
+        Returns true if all accounts have empty outgoing message queue.
+
+        This API is intended to be used by UIs
+        to request that operating system does not put the application in background
+        while there are still outgoing messages that are not sent out.
+        """
+        return self.transport.call("is_sending_finished")
